@@ -16,15 +16,7 @@ export class RuleEngineService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    const defs = this.registry.get('rules').entries.map(({ file, data }) => {
-      try {
-        return data as unknown as SimeRule;
-      } catch (e) {
-        throw new Error(`规则编译失败 ${file}: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    });
-    this.engine = new RuleEngine(defs);
-    this.logger.log(`rules compiled: ${this.engine.rules.length}`);
+    this.onModuleInitEngine();
     this.pg
       .init()
       .then((ok) => {
@@ -40,5 +32,22 @@ export class RuleEngineService implements OnModuleInit {
       void this.pg.insertAlert(a).catch(() => undefined);
     }
     return produced;
+  }
+
+  /** 重建引擎（清空窗口/冷却/告警状态），供"重置回放"使用。 */
+  rebuild(): void {
+    this.onModuleInitEngine();
+  }
+
+  private onModuleInitEngine(): void {
+    const defs = this.registry.get('rules').entries.map(({ file, data }) => {
+      try {
+        return data as unknown as SimeRule;
+      } catch (e) {
+        throw new Error(`规则编译失败 ${file}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    });
+    this.engine = new RuleEngine(defs);
+    this.logger.log(`rules compiled: ${this.engine.rules.length}`);
   }
 }

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SIME 控制台</title>
+  <link rel="stylesheet" href="/ui/style.css" />
+</head>
+<body>
+  <header>
+    <div class="logo">SIME<span>智慧集成管理平台 · 物联运维 + 安全运营</span></div>
+    <div id="health" class="badge">加载中…</div>
+    <nav><a href="/docs">API 文档</a><a href="https://github.com/buaiqueyangi/sime">GitHub</a></nav>
+  </header>
+  <main>
+    <section class="cards" id="cards"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>安全告警</h2>
+        <button id="simulate">▶ 模拟攻击回放</button>
+        <button id="reset" class="ghost">重置引擎</button>
+        <span id="simNote" class="note"></span>
+      </div>
+      <table>
+        <thead><tr><th>时间</th><th>级别</th><th>域</th><th>规则</th><th>分组</th><th>研判摘要</th></tr></thead>
+        <tbody id="alerts"><tr><td colspan="6" class="empty">暂无告警 —— 点击「模拟攻击回放」看引擎实时检出</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>检测规则库 <span id="ruleCount" class="count"></span></h2></div>
+      <table>
+        <thead><tr><th>规则 ID</th><th>名称</th><th>域</th><th>类别</th><th>级别</th><th>MITRE ATT&CK</th></tr></thead>
+        <tbody id="rules"></tbody>
+      </table>
+    </section>
+
+    <section class="cols">
+      <section class="panel">
+        <div class="panel-head"><h2>日志源适配库</h2></div>
+        <table>
+          <thead><tr><th>适配器</th><th>厂商 / 产品</th><th>协议</th><th>威胁字典</th></tr></thead>
+          <tbody id="adapters"></tbody>
+        </table>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>物模型模板</h2></div>
+        <table>
+          <thead><tr><th>模板</th><th>类别</th><th>属性</th><th>事件</th><th>安全</th></tr></thead>
+          <tbody id="models"></tbody>
+        </table>
+      </section>
+    </section>
+  </main>
+  <footer>SIME v0.1.0 · Apache-2.0 · 社区版全功能 · 数据 3s 自动刷新</footer>
+  <script src="/ui/app.js"></script>
+</body>
+</html>
