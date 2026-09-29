@@ -20,6 +20,8 @@ import { PlaybookService } from './soar/playbook.service';
 import { WsService } from './ws/ws.service';
 import { LakeService } from './lake/lake.service';
 import { LakeController } from './lake/lake.controller';
+import { TopologyService } from './topology/topology.service';
+import { TopologyController } from './topology/topology.controller';
 
 @Module({
   controllers: [
@@ -34,6 +36,7 @@ import { LakeController } from './lake/lake.controller';
     AuthController,
     PlaybooksController,
     LakeController,
+    TopologyController,
   ],
   providers: [
     AssetRegistryService,
@@ -46,6 +49,7 @@ import { LakeController } from './lake/lake.controller';
     PlaybookService,
     WsService,
     LakeService,
+    TopologyService,
   ],
 })
 export class AppModule {}

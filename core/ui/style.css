@@ -122,6 +122,10 @@ select { background: #0d1526; color: var(--text); border: 1px solid var(--line);
 .login-card input { width: 100%; margin: 6px 0; padding: 9px 12px; background: #0d1526; color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
 .login-card .brand-mark { width: 40px; height: 40px; font-size: 20px; }
 
+.topo-canvas { position: relative; height: 560px; overflow: auto; border: 1px dashed var(--line); border-radius: 10px; background-image: radial-gradient(rgba(122, 150, 205, .18) 1px, transparent 1px); background-size: 24px 24px; }
+.topo-canvas .topo-tile { position: absolute; width: 178px; margin: 0; user-select: none; touch-action: none; }
+.topo-tile.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.topo-del { position: absolute; top: 6px; right: 6px; background: transparent; border: 1px solid var(--crit); color: var(--crit); border-radius: 6px; padding: 0 6px; font-size: 11px; cursor: pointer; }
 .topo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
 .topo-tile { position: relative; background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 10px; padding: 12px; cursor: pointer; transition: border-color .15s, transform .1s; }
 .topo-tile:hover { border-color: var(--accent); transform: translateY(-2px); }

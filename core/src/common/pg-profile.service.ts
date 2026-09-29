@@ -87,6 +87,11 @@ interface PlaybookRunsRow {
   actions: string[];
   ts: Generated<Date>;
 }
+interface ConfigRow {
+  key: string;
+  value: unknown;
+  updated_at: Generated<Date>;
+}
 
 export interface DB {
   alerts: AlertsRow;
@@ -99,6 +104,7 @@ export interface DB {
   devices: DevicesRow;
   rules: RulesRow;
   playbook_runs: PlaybookRunsRow;
+  config: ConfigRow;
 }
 
 @Injectable()

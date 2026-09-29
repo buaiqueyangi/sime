@@ -368,36 +368,162 @@ function wsConnect() {
 }
 wsConnect();
 
-/* ===== 组态总览（设备瓦片自动生成，v0 运行时；拖拽编辑器 v1） ===== */
+/* ===== 组态总览 v1：运行态渲染 + 拖拽编辑器（布局持久化到 config 表） ===== */
+let topoLayout = new Map(); // assetId -> {x,y}
+let topoEdit = false;
+let topoSel = null;
+let topoDrag = null;
+let topoValues = new Map(); // assetId -> 最新测点
+
 async function refreshTopology() {
-  if (currentView !== 'topology') return;
+  if (currentView !== 'topology' || topoDrag) return;
   try {
-    const [latest, devices] = await Promise.all([jget('/api/v1/telemetry/latest'), jget('/api/v1/telemetry/devices')]);
-    const byAsset = new Map();
+    const [layout, latest, devices] = await Promise.all([
+      jget('/api/v1/topology/layout'),
+      jget('/api/v1/telemetry/latest'),
+      jget('/api/v1/telemetry/devices'),
+    ]);
+    topoLayout = new Map((layout.items || []).map((i) => [i.assetId, { x: i.x, y: i.y }]));
+    topoValues = new Map();
     for (const x of latest || []) {
-      if (!byAsset.has(x.assetId)) byAsset.set(x.assetId, []);
-      byAsset.get(x.assetId).push(x);
+      if (!topoValues.has(x.assetId)) topoValues.set(x.assetId, []);
+      topoValues.get(x.assetId).push(x);
     }
     const devInfo = new Map((devices || []).map((d) => [d.assetId, d]));
-    const tiles = [...byAsset.entries()];
-    $('topoGrid').innerHTML = tiles.length
-      ? tiles.map(([assetId, pts]) => {
-          const kind = devInfo.get(assetId)?.kind ?? 'device';
-          const vals = pts.slice(0, 3).map((p) => `<div class="t-val"><span>${esc(p.point)}</span><b>${fmtN(Math.round(p.value * 100) / 100)}</b></div>`).join('');
-          return `<div class="topo-tile" data-asset="${esc(assetId)}" data-point="${esc(pts[0].point)}">
-            <div class="t-name">${esc(assetId)}</div><div class="t-kind">${esc(kind)}</div>${vals}
-          </div>`;
-        }).join('')
-      : '<p class="dim" style="padding: 8px 4px">等待设备接入 —— 启用 compose sim profile 或向 EMQX 发布遥测</p>';
-    document.querySelectorAll('.topo-tile').forEach((t) => {
-      t.onclick = () => {
-        telSel.assetId = t.dataset.asset;
-        telSel.point = t.dataset.point;
-        showView('telemetry');
-      };
-    });
+    const allAssets = [...new Set([...topoValues.keys(), ...(devices || []).map((d) => d.assetId)])];
+    // 自动排布未布置设备
+    let auto = 0;
+    for (const a of allAssets) {
+      if (!topoLayout.has(a)) {
+        topoLayout.set(a, { x: 20 + (auto % 6) * 192, y: 16 + Math.floor(auto / 6) * 118 });
+        auto++;
+      }
+    }
+    if (!topoEdit && !$('topoCanvas').children.length) renderTopo(devInfo);
+    if (topoEdit && !$('topoCanvas').children.length) renderTopo(devInfo);
+    updateTopoValues(devInfo);
+    if (topoEdit) fillTopoAdd(devInfo, allAssets);
   } catch (e) { /* 静默重试 */ }
 }
+
+function renderTopo(devInfo) {
+  const canvas = $('topoCanvas');
+  const maxY = Math.max(560, ...[...topoLayout.values()].map((p) => p.y + 130));
+  canvas.style.height = `${maxY}px`;
+  canvas.innerHTML = '';
+  for (const [assetId, pos] of topoLayout) {
+    const tile = document.createElement('div');
+    tile.className = 'topo-tile';
+    tile.dataset.asset = assetId;
+    tile.style.left = `${pos.x}px`;
+    tile.style.top = `${pos.y}px`;
+    const kind = devInfo.get(assetId)?.kind ?? 'device';
+    tile.innerHTML = `<div class="t-name">${esc(assetId)}</div><div class="t-kind">${esc(kind)}</div><div class="t-vals"></div>${topoEdit ? '<button class="topo-del" title="移除">✕</button>' : ''}`;
+    canvas.appendChild(tile);
+    if (topoEdit) {
+      tile.addEventListener('pointerdown', (e) => startTopoDrag(e, tile, assetId));
+      tile.querySelector('.topo-del').onclick = (e) => {
+        e.stopPropagation();
+        topoLayout.delete(assetId);
+        tile.remove();
+      };
+    } else {
+      tile.onclick = () => {
+        const vals = topoValues.get(assetId) || [];
+        telSel.assetId = assetId;
+        telSel.point = vals[0]?.point ?? null;
+        showView('telemetry');
+      };
+    }
+  }
+  updateTopoValues(devInfo);
+}
+
+function updateTopoValues(devInfo) {
+  for (const [assetId, tile] of [...$('topoCanvas').children].map((el) => [el.dataset.asset, el])) {
+    const vals = (topoValues.get(assetId) || []).slice(0, 3);
+    const box = tile.querySelector('.t-vals');
+    if (box) {
+      box.innerHTML = vals.length
+        ? vals.map((p) => `<div class="t-val"><span>${esc(p.point)}</span><b>${fmtN(Math.round(p.value * 100) / 100)}</b></div>`).join('')
+        : '<div class="t-val dim">等待数据…</div>';
+    }
+  }
+}
+
+function startTopoDrag(e, tile, assetId) {
+  e.preventDefault();
+  topoSel = assetId;
+  const canvas = $('topoCanvas');
+  const rect = tile.getBoundingClientRect();
+  const cRect = canvas.getBoundingClientRect();
+  topoDrag = { tile, assetId, dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+  const move = (ev) => {
+    if (!topoDrag) return;
+    const x = Math.max(0, Math.min(ev.clientX - cRect.left - topoDrag.dx, cRect.width - 180));
+    const y = Math.max(0, ev.clientY - cRect.top - 2);
+    tile.style.left = `${x}px`;
+    tile.style.top = `${y}px`;
+  };
+  const up = () => {
+    if (topoDrag) {
+      topoLayout.set(assetId, {
+        x: parseInt(tile.style.left, 10) || 0,
+        y: parseInt(tile.style.top, 10) || 0,
+      });
+    }
+    topoDrag = null;
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+}
+
+$('topoEdit').onclick = () => {
+  topoEdit = !topoEdit;
+  $('topoEdit').textContent = topoEdit ? '✓ 完成编辑' : '✎ 编辑布局';
+  $('topoEdit').classList.toggle('primary', topoEdit);
+  $('topoEdit').classList.toggle('ghost', !topoEdit);
+  ['topoAddSel', 'topoAdd', 'topoSave', 'topoDel'].forEach((id) => $(id).classList.toggle('hidden', !topoEdit));
+  $('topoNote').textContent = topoEdit ? '编辑态：拖拽设备 · 添加/删除 · 保存布局' : '运行态 · 点击设备查看曲线 · 2s 刷新值';
+  refreshTopology();
+};
+
+function fillTopoAdd(devInfo, allAssets) {
+  const unplaced = allAssets.filter((a) => !topoLayout.has(a));
+  $('topoAddSel').innerHTML = unplaced.length
+    ? unplaced.map((a) => `<option value="${esc(a)}">${esc(a)}（${esc(devInfo.get(a)?.kind ?? 'device')}）</option>`).join('')
+    : '<option value="">画布已包含全部设备</option>';
+}
+
+$('topoAdd').onclick = () => {
+  const a = $('topoAddSel').value;
+  if (!a) { toast('没有可添加的设备', true); return; }
+  const canvas = $('topoCanvas');
+  topoLayout.set(a, { x: Math.round(canvas.scrollLeft + 40 + Math.random() * 120), y: Math.round(canvas.scrollTop + 40 + Math.random() * 80) });
+  topoSel = a;
+  refreshTopology();
+};
+
+$('topoDel').onclick = () => {
+  if (!topoSel) { toast('先在画布上点击选中一个设备', true); return; }
+  topoLayout.delete(topoSel);
+  topoSel = null;
+  refreshTopology();
+};
+
+$('topoSave').onclick = async () => {
+  try {
+    await jget('/api/v1/topology/layout', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [...topoLayout.entries()].map(([assetId, p]) => ({ assetId, ...p })) }),
+    });
+    toast('布局已保存（重载后仍生效）');
+  } catch (e) {
+    toast('保存失败: ' + e.message, true);
+  }
+};
 
 /* ===== 数据湖（DuckDB + Parquet） ===== */
 async function refreshLake() {

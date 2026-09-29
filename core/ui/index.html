@@ -99,8 +99,17 @@
       <!-- 组态总览 -->
       <section id="view-topology" class="view">
         <div class="panel">
-          <div class="panel-head"><h2>园区设备总览</h2><span class="note">由设备台账自动生成 · 点击设备跳转实时曲线 · 2s 刷新</span></div>
-          <div id="topoGrid" class="topo-grid"></div>
+          <div class="panel-head">
+            <h2>园区组态</h2>
+            <button id="topoEdit" class="btn ghost">✎ 编辑布局</button>
+            <span id="topoNote" class="note">运行态 · 点击设备查看曲线 · 2s 刷新值</span>
+            <span style="flex: 1"></span>
+            <select id="topoAddSel" class="hidden"></select>
+            <button id="topoAdd" class="btn primary hidden">＋ 添加到画布</button>
+            <button id="topoDel" class="btn ghost hidden">✕ 删除选中</button>
+            <button id="topoSave" class="btn primary hidden">💾 保存布局</button>
+          </div>
+          <div id="topoCanvas" class="topo-canvas"></div>
         </div>
       </section>
 

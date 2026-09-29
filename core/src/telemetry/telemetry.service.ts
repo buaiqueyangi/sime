@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { sql } from 'kysely';
 import { PgProfileService } from '../common/pg-profile.service';
 import { AssetRegistryService } from '../common/asset-registry.service';
 import { RuleEngineService } from '../rule-engine/rule-engine.service';
@@ -36,6 +37,48 @@ export class TelemetryService {
     private readonly registry: AssetRegistryService,
     private readonly engine: RuleEngineService,
   ) {}
+
+  /** PG 写入缓冲：300ms 批量刷盘（多行 INSERT + 单语句多行 upsert），解决逐行写瓶颈（M1 压测结论）。 */
+  private pending: { asset_id: string; point: string; ts: Date; value: number }[] = [];
+  private flushing = false;
+  private flushTimer?: NodeJS.Timeout;
+
+  onModuleInit(): void {
+    this.flushTimer = setInterval(() => void this.flush(), 300);
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    clearInterval(this.flushTimer);
+    await this.flush();
+  }
+
+  private async flush(): Promise<void> {
+    if (this.flushing || !this.pending.length) return;
+    this.flushing = true;
+    const rows = this.pending.splice(0, this.pending.length);
+    try {
+      const db = this.pg.database;
+      if (db && rows.length) {
+        await db.insertInto('telemetry').values(rows).execute();
+        // point_latest 同键多行去重（保留最新），单语句多行 upsert
+        const latestByKey = new Map<string, (typeof rows)[number]>();
+        for (const r of rows) latestByKey.set(`${r.asset_id}|${r.point}`, r);
+        await db
+          .insertInto('point_latest')
+          .values([...latestByKey.values()])
+          .onConflict((oc) =>
+            oc.columns(['asset_id', 'point']).doUpdateSet({ ts: sql`excluded.ts`, value: sql`excluded.value` }),
+          )
+          .execute();
+      }
+    } catch (e) {
+      // 失败回灌队首（限流防爆炸）
+      this.pending.unshift(...rows.slice(0, 20000));
+      this.logger.warn(`telemetry flush failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      this.flushing = false;
+    }
+  }
 
   /** 从物模型模板聚合各测点量程（点名唯一时生效），供越限检查。 */
   private buildRangeMap(): void {
@@ -91,6 +134,11 @@ export class TelemetryService {
       s.push({ ts: p.ts, value: p.value });
       if (s.length > SERIES_CAP) s.splice(0, s.length - SERIES_CAP);
       if (db) rows.push({ asset_id: p.assetId, point: p.point, ts: new Date(p.ts), value: p.value });
+    // 压测结论：逐行 upsert 是瓶颈 —— 统一进缓冲，300ms 批量刷盘
+    if (db) {
+      this.pending.push(rows[rows.length - 1]!);
+      if (this.pending.length >= 20000) void this.flush();
+    }
 
       // 物模型量程越限 → range_breach 事件 → 规则引擎（遥测越限告警）
       const range = this.rangeMap.get(p.point);
