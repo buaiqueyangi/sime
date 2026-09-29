@@ -8,7 +8,17 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.use(helmet());
+  // 内网 HTTP 部署：禁用 helmet 默认的 upgrade-insecure-requests（否则所有子资源被强升 https 而加载失败）
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          'upgrade-insecure-requests': null,
+        },
+      },
+    }),
+  );
   app.setGlobalPrefix('api/v1');
   app.enableCors();
   app.enableShutdownHooks(); // Linux 生产：SIGTERM 优雅退出（compose/systemd 滚动重启零丢事件）

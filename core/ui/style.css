@@ -82,7 +82,7 @@ main { padding: 22px 26px 60px; max-width: 1400px; }
 .link { font-size: 12px; cursor: pointer; }
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; }
-@media (max-width: 980px) { .cols, .grid-2 { grid-template-columns: 1fr; } .sidebar { width: 64px; flex-basis: 64px; } .brand-text, #nav a { font-size: 0; } .brand-text small { display: none; } }
+@media (max-width: 760px) { .cols, .grid-2 { grid-template-columns: 1fr; } .sidebar { width: 64px; flex-basis: 64px; } .brand-text, #nav a { font-size: 0; } .brand-text small { display: none; } }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th { text-align: left; color: var(--dim); font-weight: 500; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; font-size: 12px; }
