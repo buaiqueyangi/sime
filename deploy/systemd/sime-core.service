@@ -1,0 +1,31 @@
+# SIME core 裸机 systemd 单元（不用 Docker 的 L3 形态）
+# 安装：cp deploy/systemd/sime-core.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now sime-core
+
+[Unit]
+Description=SIME Core (Smart Integrated Management Environment)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sime
+Group=sime
+WorkingDirectory=/opt/sime/core
+Environment=NODE_ENV=production
+Environment=SIME_PORT=3000
+Environment=SIME_ASSET_ROOT=/opt/sime
+Environment=SIME_PG_HOST=127.0.0.1
+Environment=SIME_PG_DDL=/opt/sime/storage/pg/init/01-schema.sql
+# 性能机制：堆上限与 GC 策略按 8C16G 档位给出，详见 docs/performance.md
+Environment=NODE_OPTIONS=--max-old-space-size=8192
+ExecStart=/usr/bin/node dist/main.js
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=30
+# Linux 资源上限（承接 deploy/linux-tuning.md）
+LimitNOFILE=65535
+LimitNPROC=32768
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,35 @@
+id: adapter.safeline.waf
+vendor: 长亭科技
+product: 雷池（SafeLine）Web 应用防火墙
+vendor_doc: "雷池 Syslog 字段说明（厂商官方文档）"
+protocol: json-http
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.time"
+  "src.ip": "$.src_ip"
+  "xff.ip": "$.x_forwarded_for"
+  "dst.ip": "$.dst_ip"
+  "dst.port": "$.dst_port"
+  "url.full": "$.request_uri"
+  "url.path": "$.uri"
+  "http.request.method": "$.method"
+  "http.request.body.content": "$.req_body"
+  "http.response.status_code": "$.status"
+  "user_agent.original": "$.user_agent"
+  "event.category": "web"
+  "event.outcome": "lookup:$.action"
+  "rule.name": "$.attack_type"
+  "sime.threat_id": "lookup:$.attack_type"
+threat_map:
+  "sql_injection": sime.tht.sqli
+  "xss": sime.tht.xss
+  "webshell_upload": sime.tht.webshell-upload
+  "log4j_rce": sime.tht.log4j
+  "scanner_detect": sime.tht.scan
+normalize:
+  "event.outcome":
+    拦截: deny
+    放行: allow
+    观察: alert
+sample: '{"time":"2025-04-27 11:02:44","src_ip":"198.51.100.23","x_forwarded_for":"","dst_ip":"10.2.85.119","dst_port":443,"method":"GET","uri":"/login","request_uri":"/login?id=1%27%20union%20select","req_body":"","status":403,"user_agent":"sqlmap/1.7","action":"拦截","attack_type":"sql_injection"}'

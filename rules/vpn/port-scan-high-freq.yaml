@@ -1,0 +1,27 @@
+id: rule.vpn.port-scan.high-freq
+name: VPN 接入用户高频端口探测
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: vpn
+tactics: ["TA0043 侦察"]
+techniques: ["T1046 网络服务发现"]
+severity: medium
+detection:
+  source: event.network.flow
+  window: 1m
+  group_by: ["src.user.id"]
+  threshold: { distinct_ports: 20 }
+  condition: "network.transport == 'vpn' and count_distinct(dst.port) >= 20"
+  except: "src.user.labels.role == 'it-admin'"
+response:
+  default: ["notify.sec_team"]
+  escalate:
+    - when: "count_distinct(dst.port) >= 100 or session.duration >= 4h"
+      do: ["vpn.terminate(src.user.id)", "ticket.create(sla=30m)", "notify.owner"]
+triage: >
+  VPN 账号失陷的典型行为之一是接入后立即扫描内网。区分 it-admin 白名单内的计划内运维；
+  疑似失陷时终止会话、强制改密，并结合身份中心行为时序核对该账号历史基线。
+references:
+  - https://attack.mitre.org/techniques/T1046/

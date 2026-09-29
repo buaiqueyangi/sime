@@ -1,0 +1,23 @@
+id: rule.merged.infection-then-bruteforce
+name: 主机感染病毒后发起暴力破解（跨源链式）
+version: "1.0"
+status: stable
+author: sime-core
+domain: merged
+category: ueba
+tactics: ["TA0008 横向移动", "TA0006 凭证访问", "TA0011 命令与控制"]
+techniques: ["T1110.002 密码破解", "T1071.001 Web 协议"]
+severity: critical
+detection:
+  source: event.security.hids+event.security.auth
+  window: 1h
+  group_by: ["src.asset_id"]
+  condition: "sequence([event.name == 'virus_detect', event.outcome == 'failure']) within 1h"
+  except: "src.asset.labels.role == 'scanner'"
+response:
+  default: ["isolate.host(src.asset_id)", "ticket.create(sla=5m)", "notify.sec_team", "notify.owner(src.asset_id)"]
+triage: >
+  病毒告警后的短窗口口令尝试是自动化横向扩散的强信号（对应日志易 Flink 规则表同源场景）：
+  无需二次研判直接隔离源主机，随后排查同网段资产感染面与口令复用情况。
+references:
+  - https://attack.mitre.org/techniques/T1110/002/

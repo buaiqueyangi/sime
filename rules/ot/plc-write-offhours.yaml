@@ -1,0 +1,25 @@
+id: rule.ot.plc-write-offhours
+name: 非值班时段 PLC 写指令（未授权程序下发）
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0108 ICS 影响"]
+techniques: ["T0843 程序下载", "T0855 未授权指令消息"]
+severity: critical
+detection:
+  source: adapter.ot.opcua-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and event.action in ('write','program_download') and dst.asset.type == 'plc' and not time.in_shift(dst.asset.labels.shift)"
+  except: "src.asset_id.labels.role == 'scada-master'"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty", "notify.sec_team"]
+triage: >
+  工控侧最高优先级：非值班窗口对 PLC 的写/下发指令直接联动 plc.deny 阻断下发通道并告警
+  工控值班与安全值班双线。核实操作员身份与工单；确认为计划内程序更新（工单关联）后解除。
+  OT 规则是 SIME 与通用 IT SOC 的差异化主战场，此条为核心样板。
+references:
+  - https://attack.mitre.org/techniques/T0843/
+  - https://attack.mitre.org/techniques/T0855/

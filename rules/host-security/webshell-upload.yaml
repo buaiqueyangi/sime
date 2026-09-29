@@ -1,0 +1,25 @@
+id: rule.host.webshell.upload
+name: 检测 WebShell 上传与后门落盘
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0003 权限维持"]
+techniques: ["T1505.003 Web Shell"]
+severity: critical
+detection:
+  source: event.security.waf+event.security.hids
+  window: 10m
+  group_by: ["dst.asset_id"]
+  condition: "(http.request.body.content matches '.*(eval|system|passthru|cmd)\\(' and http.request.method == 'POST' and url.path matches '.*(upload|include).*') or event.name == 'webshell_detect'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+  escalate:
+    - when: "file.name matches '.*\\.(php|jsp|asp)x?$'"
+      do: ["file.quarantine(file.path)", "notify.owner(dst.asset_id)"]
+triage: >
+  上传接口写入脚本文件后紧跟可疑函数调用，按 WebShell 处置：隔离文件、比对应用侧发布记录
+  排除计划内发布；确认失陷后启动主机入侵应急流程并回溯同源 IP 历史行为。
+references:
+  - https://attack.mitre.org/techniques/T1505/003/

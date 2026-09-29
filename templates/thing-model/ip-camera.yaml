@@ -1,0 +1,29 @@
+id: tmpl.ip-camera.v1
+category: security.camera
+label: 网络摄像机（GB/T 28181）
+description: 视频监控资产，在线状态与流量遥测，弱遥测高频事件
+properties:
+  - id: online
+    type: boolean
+    collect: { interval: 30s }
+    store: { hot: 30d, warm: 1y, downsample: 5m }
+  - id: bitrate_kbps
+    type: number
+    unit: kbps
+    range: [0, 20000]
+    store: { hot: 14d, warm: 90d, downsample: 5m/1h }
+events:
+  - id: offline
+    severity: warning
+    domain: ot
+  - id: tamper_detect
+    severity: critical
+    domain: ot
+  - id: illegal_login
+    severity: critical
+    domain: merged
+security:
+  asset_criticality: 2
+  exposure: intranet
+  command_allowlist: ["nvr-master-01"]
+labels: { building: string, floor: string, zone: string }

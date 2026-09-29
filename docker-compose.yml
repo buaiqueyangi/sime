@@ -1,0 +1,55 @@
+# SIME L1/L3 形态：一条命令拉起（生产参数见 deploy/ 与 docs/performance.md）。
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sime
+      POSTGRES_PASSWORD: ${SIME_PG_PASSWORD:-sime-change-me}
+      POSTGRES_DB: sime
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./storage/pg/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sime"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  core:
+    build:
+      context: .
+      dockerfile: core/Dockerfile
+    init: true # 容器内 PID 1 信号转发，滚动重启零僵尸
+    environment:
+      SIME_PORT: "3000"
+      SIME_ASSET_ROOT: /app/assets
+      SIME_PG_HOST: postgres
+      SIME_PG_PASSWORD: ${SIME_PG_PASSWORD:-sime-change-me}
+      SIME_PG_DDL: /app/assets/storage/pg/init/01-schema.sql
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/v1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  # ---- M1 预留（docker compose --profile m1 up -d 启用）----
+  redis:
+    image: redis:7.2-alpine
+    profiles: ["m1"]
+    ports: ["6379:6379"]
+
+  emqx:
+    image: emqx/emqx:5.8
+    profiles: ["m1"]
+    ports: ["1883:1883", "18083:18083"]
+
+volumes:
+  pgdata:

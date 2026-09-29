@@ -1,0 +1,29 @@
+id: rule.host.bruteforce.multi-target
+name: 同一源主机对多台主机发起暴力破解
+version: "1.0"
+status: stable
+author: sime-core
+domain: merged
+category: host-security
+tactics: ["TA0006 凭证访问", "TA0008 横向移动"]
+techniques: ["T1110.002 密码破解", "T1570 横向工具转移"]
+severity: high
+detection:
+  source: event.security.auth
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { failed_logins: 20, distinct_targets: 3 }
+  condition: "event.category == 'authentication' and count(event.category == 'authentication' and event.outcome == 'failure') >= 20 and count_distinct(dst.asset_id) >= 3"
+  except: "src.asset.labels.role == 'scanner'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+  escalate:
+    - when: "src.asset_id != null"
+      do: ["isolate.host(src.asset_id)", "notify.owner(src.asset_id)"]
+triage: >
+  内网源短窗口内对多台主机口令失败，优先判断横向移动：确认源主机是否为计划内扫描器/跳板机
+  （比对资产标签 role=scanner 白名单）；未知主机立即隔离并排查持久化与凭证窃取痕迹。
+  若均失败且账密相同，先联系业务组确认是否为脚本执行失败。
+references:
+  - https://attack.mitre.org/techniques/T1110/002/
+  - https://attack.mitre.org/techniques/T1570/

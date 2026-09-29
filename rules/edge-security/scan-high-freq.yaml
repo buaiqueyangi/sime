@@ -1,0 +1,27 @@
+id: rule.edge.scan.high-freq
+name: 高频扫描行为（5 分钟 20+ 资产）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: edge-security
+tactics: ["TA0043 侦察"]
+techniques: ["T1595.002 漏洞扫描"]
+severity: medium
+detection:
+  source: adapter.sangfor.ips
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { scanned_assets: 20 }
+  condition: "event.category == 'network-connection' and count_distinct(dst.asset_id) >= 20"
+  except: "src.asset.labels.role in ('scanner','monitor')"
+response:
+  default: ["notify.sec_team", "ticket.create"]
+  escalate:
+    - when: "src.geo.country != 'CN' and count_distinct(url.path) >= 30"
+      do: ["firewall.block(src.ip, ttl=24h)"]
+triage: >
+  高危判定后比对大客户清单再封禁；低频扫描（窗口内少量目录探测且无后续动作）保持观察不封禁。
+  单一资产集中请求 .env / .git 等敏感路径按定向侦察升级处理。
+references:
+  - https://attack.mitre.org/techniques/T1595/002/

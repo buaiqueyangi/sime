@@ -1,0 +1,42 @@
+id: tmpl.power-meter.v2
+category: energy.meter
+label: 智能电表（DL/T 645 / MQTT 透传）
+description: 园区配电回路电表，遥测 15s，日冻结电能
+properties:
+  - id: active_power
+    type: number
+    unit: kW
+    range: [0, 9999]
+    collect: { interval: 15s }
+    store: { hot: 90d, warm: 2y, downsample: 1m/1h/1d }
+  - id: reactive_power
+    type: number
+    unit: kvar
+    range: [0, 9999]
+    store: { hot: 90d, warm: 2y, downsample: 1m/1h/1d }
+  - id: voltage_a
+    type: number
+    unit: V
+    range: [0, 500]
+    store: { hot: 30d, warm: 1y, downsample: 1m/1h }
+  - id: daily_energy
+    type: number
+    unit: kWh
+    range: [0, 1000000]
+    store: { hot: 400d, warm: 5y, downsample: 1d }
+events:
+  - id: cover_open
+    severity: warning
+    domain: ot
+  - id: power_loss
+    severity: critical
+    domain: ot
+services:
+  - id: remote_switch
+    input: { action: ["on", "off"] }
+    permission: ot.control
+security:
+  asset_criticality: 3
+  exposure: intranet
+  command_allowlist: ["scada-master-01"]
+labels: { building: string, floor: string, circuit: string }

@@ -1,0 +1,22 @@
+id: rule.ot.command-unknown-source
+name: 控制指令来自白名单外来源
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0110 ICS 操纵"]
+techniques: ["T0855 未授权指令消息", "T0886 远程服务"]
+severity: critical
+detection:
+  source: adapter.ot.modbus-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and src.asset.id not in dst.asset.security.command_allowlist"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty"]
+triage: >
+  控制指令来源不在资产 command_allowlist 白名单内即告警（白名单由物模型 security 段声明）。
+  先确认是否为新增上位机未登记；来源不明时保持阻断并排查网络路径中的越权接入点。
+references:
+  - https://attack.mitre.org/techniques/T0855/

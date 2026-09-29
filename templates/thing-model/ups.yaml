@@ -1,0 +1,37 @@
+id: tmpl.ups.v1
+category: power.ups
+label: UPS 不间断电源（SNMP）
+description: 机房/配电室 UPS，电池与负载遥测，越限事件
+properties:
+  - id: load_percent
+    type: number
+    unit: "%"
+    range: [0, 120]
+    collect: { interval: 30s }
+    store: { hot: 90d, warm: 2y, downsample: 1m/1h/1d }
+  - id: battery_percent
+    type: number
+    unit: "%"
+    range: [0, 100]
+    store: { hot: 90d, warm: 2y, downsample: 1m/1h }
+  - id: input_voltage
+    type: number
+    unit: V
+    range: [0, 500]
+    store: { hot: 30d, warm: 1y, downsample: 1m }
+  - id: runtime_remaining_min
+    type: number
+    unit: min
+    range: [0, 600]
+    store: { hot: 30d, warm: 1y, downsample: 1m }
+events:
+  - id: on_battery
+    severity: critical
+    domain: ot
+  - id: battery_low
+    severity: warning
+    domain: ot
+security:
+  asset_criticality: 5
+  exposure: intranet
+labels: { building: string, room: string, row: string }

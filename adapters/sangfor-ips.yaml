@@ -1,0 +1,32 @@
+id: adapter.sangfor.ips
+vendor: 深信服
+product: AF 应用防火墙（IPS/WAF 模块）
+vendor_doc: "厂商 Syslog 日志格式示例 / ips、waf 威胁分类字典（深信服官方文档）"
+protocol: syslog-udp
+parse:
+  format: kv
+  template: "time=<time> src_ip=<src_ip> src_port=<src_port> dst_ip=<dst_ip> dst_port=<dst_port> rule_id=<rule_id> threat=<threat_name> level=<level> action=<action>"
+mapping:
+  "@timestamp": "<time>"
+  "src.ip": "<src_ip>"
+  "src.port": "<src_port>"
+  "dst.ip": "<dst_ip>"
+  "dst.port": "<dst_port>"
+  "rule.id": "<rule_id>"
+  "rule.name": "<threat_name>"
+  "event.severity": "<level>"
+  "event.outcome": "<action>"
+  "event.category": "intrusion-detection"
+  "sime.threat_id": "lookup:<rule_id>"
+normalize:
+  "event.outcome":
+    允许: allow
+    阻断: deny
+    告警: alert
+threat_map:
+  "1000001": sime.tht.bruteforce
+  "1000002": sime.tht.sqli
+  "1000003": sime.tht.xss
+  "1000004": sime.tht.port-scan
+  "1000005": sime.tht.webshell-upload
+sample: "time=2025-04-27 10:23:01 src_ip=203.0.113.7 src_port=52110 dst_ip=10.2.85.118 dst_port=8080 rule_id=1000002 threat=SQL注入攻击 level=高危 action=阻断"

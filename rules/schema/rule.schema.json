@@ -1,0 +1,76 @@
+{
+  "$id": "https://sime.dev/schemas/rule-1.0.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SIME Detection Rule (six-element template)",
+  "description": "六要素：规则名称 / MITRE ATT&CK 映射 / 阈值窗口 / 风险等级 / 处置动作 / 研判说明",
+  "type": "object",
+  "required": ["id", "name", "version", "status", "domain", "category", "tactics", "techniques", "severity", "detection", "response", "triage"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^rule\\.[a-z0-9]+(\\.[a-z0-9-]+)+$" },
+    "name": { "type": "string", "minLength": 4, "maxLength": 60 },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+$" },
+    "status": { "enum": ["draft", "stable", "deprecated"] },
+    "author": { "type": "string" },
+    "domain": { "enum": ["it", "ot", "merged"], "description": "it=IT安全, ot=工控安全, merged=跨源关联" },
+    "category": { "enum": ["host-security", "edge-security", "network-security", "vpn", "email", "web", "identity", "ot", "ueba", "compliance"] },
+    "tactics": {
+      "type": "array", "minItems": 1,
+      "items": { "type": "string", "pattern": "^TA\\d{4}( .+)?$" },
+      "description": "MITRE ATT&CK 战术编号（OT 规则用 MITRE ATT&CK for ICS 的 TA0108~TA0117 亦可，正则同形）"
+    },
+    "techniques": {
+      "type": "array", "minItems": 1,
+      "items": { "type": "string", "pattern": "^T\\d{4}(\\.\\d{3})?( .+)?$" },
+      "description": "MITRE ATT&CK 技术编号（企业版 T1xxx / ICS 版 T0xxx）"
+    },
+    "severity": { "enum": ["info", "low", "medium", "high", "critical"] },
+    "detection": {
+      "type": "object",
+      "required": ["source", "condition"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "description": "事件流标识，如 event.security.auth 或适配器 id" },
+        "window": { "type": "string", "pattern": "^\\d+[smhd]$", "description": "滑动窗口，如 5m / 1h" },
+        "group_by": { "type": "array", "items": { "type": "string" }, "description": "聚合维度（ECS 字段）" },
+        "threshold": {
+          "type": "object",
+          "description": "阈值速览（与 condition 语义一致，供规则编辑器展示）",
+          "additionalProperties": { "type": "number" }
+        },
+        "condition": { "type": "string", "minLength": 6, "description": "布尔条件表达式（字段名用 ECS 点号路径）" },
+        "except": { "type": "string", "description": "白名单/例外条件" }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["default"],
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "array", "minItems": 1,
+          "items": { "$ref": "#/definitions/action" }
+        },
+        "escalate": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "required": ["when", "do"],
+            "properties": {
+              "when": { "type": "string" },
+              "do": { "type": "array", "items": { "$ref": "#/definitions/action" } }
+            }
+          }
+        }
+      }
+    },
+    "triage": { "type": "string", "minLength": 20, "description": "研判说明/示例，值班人员第一眼看到的内容" },
+    "references": { "type": "array", "items": { "type": "string", "pattern": "^https?://" } }
+  },
+  "definitions": {
+    "action": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.]*(\\([^()]{0,200}\\))?$",
+      "description": "处置动作：notify.*, ticket.create(sla=15m), firewall.block(src.ip, ttl=24h), isolate.host(asset_id), account.lock(user, ttl=1h), plc.deny(...) 等"
+    }
+  }
+}

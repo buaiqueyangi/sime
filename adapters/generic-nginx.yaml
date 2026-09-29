@@ -1,0 +1,26 @@
+id: adapter.generic.nginx-access
+vendor: 通用
+product: Nginx Access Log
+vendor_doc: "SIME 内置通用模板（正则提取参考项目实践）"
+protocol: file
+parse:
+  format: regex
+  template: '^(?<client_ip>\S+)\s(?<ident>\S+)\s(?<remote_user>\S+)\s\[(?<time>[^\]]+)\]\s"(?<method>[^"]*)"\s(?<status>\d{3})\s(?<body_bytes_sent>[^"]*)\s"(?<referer>[^"]*)"\s"(?<user_agent>[^"]*)"\s"(?<xff_ip>[^"]*)"'
+mapping:
+  "@timestamp": "<time>"
+  "src.ip": "<client_ip>"
+  "user.name": "<remote_user>"
+  "http.request.method": "<method>"
+  "http.response.status_code": "<status>"
+  "http.request.body.bytes": "<body_bytes_sent>"
+  "user_agent.original": "<user_agent>"
+  "xff.ip": "<xff_ip>"
+  "event.category": "web"
+  "event.outcome": "lookup:<status>"
+normalize:
+  "event.outcome":
+    "2xx": allow
+    "3xx": allow
+    "4xx": deny
+    "5xx": failure
+sample: '10.8.20.31 - - [27/Apr/2025:11:15:32 +0800] "POST /api/v1/login HTTP/1.1" 401 188 "-" "python-requests/2.31" "10.8.20.1"'

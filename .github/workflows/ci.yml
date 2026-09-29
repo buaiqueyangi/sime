@@ -1,0 +1,38 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: install
+        working-directory: core
+        run: npm ci
+      - name: build
+        working-directory: core
+        run: npm run build
+      - name: validate assets (rules/adapters/templates against JSON Schema)
+        working-directory: core
+        run: npm run validate
+      - name: smoke test
+        working-directory: core
+        run: npm test
+      - name: benchmark (informational)
+        working-directory: core
+        run: npm run bench -- --quick
+
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: demo generator smoke
+        run: python demo/generate.py --smoke --out demo/out-smoke

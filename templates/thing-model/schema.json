@@ -1,0 +1,77 @@
+{
+  "$id": "https://sime.dev/schemas/thing-model-1.0.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SIME Thing Model",
+  "description": "物模型：OT 设备与 IT 资产共享的统一语义层（自研核心的对外格式）",
+  "type": "object",
+  "required": ["id", "category", "label", "properties"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^tmpl\\.[a-z0-9-]+\\.v\\d+$" },
+    "category": { "type": "string", "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)*$" },
+    "label": { "type": "string", "minLength": 2 },
+    "description": { "type": "string" },
+    "properties": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "type": { "enum": ["number", "boolean", "string", "enum"] },
+          "unit": { "type": "string" },
+          "range": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } },
+          "enum_values": { "type": "array", "items": { "type": "string" } },
+          "collect": {
+            "type": "object", "additionalProperties": false,
+            "properties": { "interval": { "type": "string", "pattern": "^\\d+[smh]$" } }
+          },
+          "store": {
+            "type": "object", "additionalProperties": false,
+            "description": "降采样与冷热分层策略声明（写入时物化，模板统一下发）",
+            "properties": {
+              "hot": { "type": "string", "pattern": "^\\d+d$" },
+              "warm": { "type": "string", "pattern": "^\\d+[dmy]$" },
+              "downsample": { "type": "string", "pattern": "^[0-9a-z/]+$" }
+            }
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["id", "severity"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "severity": { "enum": ["info", "warning", "critical"] },
+          "domain": { "enum": ["it", "ot", "merged"] }
+        }
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["id"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "input": { "type": "object" },
+          "permission": { "type": "string" }
+        }
+      }
+    },
+    "security": {
+      "type": "object", "additionalProperties": false,
+      "description": "安全视角一等公民：IT/OT 融合的语义基础",
+      "properties": {
+        "asset_criticality": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "exposure": { "enum": ["intranet", "dmz", "internet"] },
+        "command_allowlist": { "type": "array", "items": { "type": "string" }, "description": "允许下发控制指令的来源资产" }
+      }
+    },
+    "labels": { "type": "object", "additionalProperties": { "type": "string" } }
+  }
+}

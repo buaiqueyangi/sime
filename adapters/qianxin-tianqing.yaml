@@ -1,0 +1,36 @@
+id: adapter.qianxin.tianqing
+vendor: 奇安信
+product: 天擎终端安全管理系统（EDR/AV）
+vendor_doc: "天擎 V10.0R7 Syslog 接口说明和字典表 V1.16（厂商官方文档）"
+protocol: syslog-tcp
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.occur_time"
+  "src.ip": "$.src_address"
+  "src.asset_id": "lookup:$._client_id"
+  "dst.ip": "$.dst_address"
+  "event.name": "$.event_type_name"
+  "event.category": "endpoint"
+  "event.outcome": "detected"
+  "file.name": "$.file_name"
+  "file.path": "$.file_path"
+  "process.name": "$.process_name"
+  "user.name": "$.user_name"
+  "event.severity": "lookup:$.level"
+  "sime.threat_id": "lookup:$.event_type_id"
+threat_map:
+  "30101": sime.tht.virus
+  "30102": sime.tht.trojan
+  "30103": sime.tht.ransomware
+  "30104": sime.tht.miner
+  "30105": sime.tht.reverse-shell
+  "30106": sime.tht.webshell-detect
+  "30107": sime.tht.bruteforce
+normalize:
+  "event.severity":
+    "1": low
+    "2": medium
+    "3": high
+    "4": critical
+sample: '{"occur_time":"2025-04-27 10:30:12","src_address":"10.233.71.108","_client_id":"C-88231","event_type_id":"30105","event_type_name":"反弹Shell","level":"4","process_name":"bash","file_path":"/tmp/.x","user_name":"root"}'

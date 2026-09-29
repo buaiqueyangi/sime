@@ -1,0 +1,23 @@
+id: rule.edge.ips.unblocked-multi-attack
+name: 同一外网源多次攻击且有未拦截记录
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: edge-security
+tactics: ["TA0001 初始访问"]
+techniques: ["T1190 利用面向公众的应用程序"]
+severity: high
+detection:
+  source: adapter.sangfor.ips
+  window: 30m
+  group_by: ["src.ip"]
+  threshold: { total_attacks: 10, unblocked: 1 }
+  condition: "event.category == 'intrusion-detection' and count() >= 10 and count(event.outcome == 'failure') >= 1"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create"]
+triage: >
+  高频攻击且有未拦截记录说明防御存在缺口：先核对未拦截事件命中的具体规则与目标端口，
+  确认是否为误报后再封禁；封禁后观察同源是否切换 IP 段（比对大客户白名单避免误伤）。
+references:
+  - https://attack.mitre.org/techniques/T1190/

@@ -1,0 +1,22 @@
+id: rule.host.reverse-shell.dmz
+name: DMZ 区主机疑似反弹 Shell
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0001 初始访问", "TA0002 执行"]
+techniques: ["T1059.004 Unix Shell"]
+severity: critical
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('reverse_shell','bind_shell') and dst.asset.labels.zone == 'dmz'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  DMZ 主机反弹 Shell 属于最高优先级：立即隔离（isolate 动作走物模型服务），保留进程与网络
+  会话现场后重置系统。回溯入口：结合 WAF/IPS 日志确认初始访问路径（对齐 T1190）。
+references:
+  - https://attack.mitre.org/techniques/T1059/004/
