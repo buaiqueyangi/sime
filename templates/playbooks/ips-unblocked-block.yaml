@@ -1,0 +1,10 @@
+id: pb.ips-unblocked.block
+name: IPS 未拦截攻击源封禁
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.edge.ips.unblocked-multi-attack
+steps:
+  - firewall.block(src.ip, ttl=24h)
+  - notify.owner(dst.asset_id)

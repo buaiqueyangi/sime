@@ -1,0 +1,22 @@
+id: rule.ot.firmware-manipulation
+name: 控制器固件变更
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 ICS 物理过程操纵", "TA0103 ICS 设备重启/关闭"]
+techniques: ["T0857 固件操纵"]
+severity: critical
+detection:
+  source: adapter.ot.opcua-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and event.action in ('firmware_update','program_download','device_reboot')"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty", "notify.sec_team"]
+triage: >
+  控制器固件变更/重启直接影响生产过程：确认是否为计划内升级工单；
+  非计划内事件保持阻断并立即现场核实设备状态，回溯下发指令来源与路径。
+references:
+  - https://attack.mitre.org/techniques/T0857/

@@ -1,0 +1,9 @@
+id: pb.scan-threshold.block
+name: 高频扫描自动封禁
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.edge.scan.high-freq
+steps:
+  - firewall.block(src.ip, ttl=12h)

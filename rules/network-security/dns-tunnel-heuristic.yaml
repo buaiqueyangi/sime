@@ -1,0 +1,23 @@
+id: rule.net.dns-tunnel-heuristic
+name: DNS 隧道启发检测
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: network-security
+tactics: ["TA0011 命令与控制"]
+techniques: ["T1071.004 DNS"]
+severity: high
+detection:
+  source: event.network.dns
+  window: 5m
+  group_by: ["src.asset_id"]
+  threshold: { txt_queries: 30, long_labels: 10 }
+  condition: "dns.record_type in ('TXT','NULL') and count() >= 30 or dns.question_length >= 60 and count() >= 10"
+response:
+  default: ["firewall.block(src.asset_id, egress=true)", "ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  高频 TXT/NULL 查询或超长域名标签是 DNS 隧道特征：核实查询域名是否为已知
+  业务域名（CDN/监控探针常见误报）；确认隧道后阻断并排查发起进程。
+references:
+  - https://attack.mitre.org/techniques/T1071/004/

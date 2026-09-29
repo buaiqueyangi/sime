@@ -1,0 +1,29 @@
+id: adapter.hillstone.waf
+vendor: 山石网科
+product: Hillstone Web 应用防火墙
+vendor_doc: "山石 WAF 3.5 Syslog 说明"
+protocol: syslog-udp
+parse:
+  format: kv
+  template: "timestamp=<timestamp> src=<src_ip> sport=<src_port> dst=<dst_ip> dport=<dst_port> vsys=<vsys> attack=<attack_name> severity=<severity> action=<action>"
+mapping:
+  "@timestamp": "<timestamp>"
+  "src.ip": "<src_ip>"
+  "src.port": "<src_port>"
+  "dst.ip": "<dst_ip>"
+  "dst.port": "<dst_port>"
+  "rule.name": "<attack_name>"
+  "event.category": "web"
+  "event.severity": "<severity>"
+  "event.outcome": "<action>"
+  "sime.threat_id": "lookup:<attack_name>"
+normalize:
+  "event.outcome":
+    permit: allow
+    deny: deny
+    alert: alert
+threat_map:
+  "sql-injection": sime.tht.sqli
+  "cross-site-scripting": sime.tht.xss
+  "webshell-upload": sime.tht.webshell-upload
+sample: "timestamp=2025-04-27 12:05:40 src=198.51.100.80 sport=55011 dst=10.2.86.31 dport=80 vsys=trust attack=sql-injection severity=high action=deny"

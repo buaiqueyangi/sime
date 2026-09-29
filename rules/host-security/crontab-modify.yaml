@@ -1,0 +1,25 @@
+id: rule.host.crontab-modify
+name: 计划任务/定时项变更（持久化疑点）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持"]
+techniques: ["T1053.003 Cron"]
+severity: medium
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('crontab_modify','scheduled_task_create') and file.path matches '.*(cron|spool).*'"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+  escalate:
+    - when: "file.path matches '.*(var/spool/cron|/etc/cron).*' and user.name == 'root'"
+      do: ["notify.sec_team"]
+triage: >
+  非发布窗口的 crontab 变更是持久化后门常见落点：核对变更内容与发布工单；
+  非计划内变更提取命令行做沙箱研判并回溯写入进程。
+references:
+  - https://attack.mitre.org/techniques/T1053/003/

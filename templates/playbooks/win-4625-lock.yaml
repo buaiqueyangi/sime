@@ -1,0 +1,10 @@
+id: pb.win-4625.lock
+name: Windows 爆破账户锁定
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.win.logon-4625-burst
+steps:
+  - account.lock(user.name, ttl=2h)
+  - firewall.block(src.ip, ttl=24h)

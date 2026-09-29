@@ -1,0 +1,32 @@
+id: adapter.huorong.edr
+vendor: 火绒
+product: 火绒安全软件（终端防护）
+vendor_doc: "火绒 Syslog 接口说明"
+protocol: syslog-tcp
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.time"
+  "src.ip": "$.src_ip"
+  "src.asset_id": "lookup:$.host_name"
+  "event.name": "$.event_name"
+  "event.category": "endpoint"
+  "event.outcome": "detected"
+  "file.name": "$.file_name"
+  "file.path": "$.file_path"
+  "process.name": "$.process"
+  "user.name": "$.user"
+  "event.severity": "lookup:$.level"
+  "sime.threat_id": "lookup:$.event_type"
+normalize:
+  "event.severity":
+    "low": low
+    "medium": medium
+    "high": high
+    "critical": critical
+threat_map:
+  "virus": sime.tht.virus
+  "trojan": sime.tht.trojan
+  "ransomware": sime.tht.ransomware
+  "malware_url": sime.tht.webshell-detect
+sample: '{"time":"2025-04-27 12:10:03","src_ip":"10.2.88.12","host_name":"PC-FIN-031","event_type":"trojan","event_name":"查获木马程序","level":"high","process":"svchost.exe","file_name":"svcupd.exe","file_path":"C:/Users/Public/svcupd.exe","user":"fin01"}'

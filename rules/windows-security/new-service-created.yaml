@@ -1,0 +1,25 @@
+id: rule.win.new-service-created
+name: Windows 新建系统服务
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持", "TA0004 权限提升"]
+techniques: ["T1543.003 Windows 服务"]
+severity: medium
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('service_create','service_install')"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+  escalate:
+    - when: "process.name matches '(?i)(powershell|cmd|wscript|cscript)'"
+      do: ["notify.sec_team"]
+triage: >
+  服务创建是系统级持久化：核对服务二进制路径与发布记录；由脚本类进程创建的
+  服务按高危处理，提取路径做哈希与威胁情报比对。
+references:
+  - https://attack.mitre.org/techniques/T1543/003/

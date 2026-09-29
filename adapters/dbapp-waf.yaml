@@ -1,0 +1,28 @@
+id: adapter.dbapp.waf
+vendor: 安恒信息
+product: 明御 Web 应用防火墙
+vendor_doc: "明御 WAF Syslog 风险通知格式文档"
+protocol: syslog-udp
+parse:
+  format: kv
+  template: "time=<time> src_ip=<src_ip> dst_ip=<dst_ip> uri=<uri> attack=<attack_type> level=<level> action=<action>"
+mapping:
+  "@timestamp": "<time>"
+  "src.ip": "<src_ip>"
+  "dst.ip": "<dst_ip>"
+  "url.path": "<uri>"
+  "rule.name": "<attack_type>"
+  "event.category": "web"
+  "event.severity": "<level>"
+  "event.outcome": "<action>"
+  "sime.threat_id": "lookup:<attack_type>"
+normalize:
+  "event.outcome":
+    拦截: deny
+    放行: allow
+threat_map:
+  "SQL注入": sime.tht.sqli
+  "XSS攻击": sime.tht.xss
+  "webshell上传": sime.tht.webshell-upload
+  "扫描器": sime.tht.scan
+sample: "time=2025-04-27 12:45:02 src_ip=203.0.113.77 dst_ip=10.2.86.50 uri=/admin/login.jsp attack=SQL注入 level=高 action=拦截"

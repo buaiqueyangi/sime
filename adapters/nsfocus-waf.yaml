@@ -1,0 +1,30 @@
+id: adapter.nsfocus.waf
+vendor: 绿盟
+product: Web 应用防火墙（NSFOCUS WAF）
+vendor_doc: "绿盟 WAF Syslog 接口文档"
+protocol: syslog-udp
+parse:
+  format: kv
+  template: "time=<time> src_ip=<src_ip> dst_ip=<dst_ip> dst_port=<dst_port> rule_id=<rule_id> attack_type=<attack_type> risk=<risk> action=<action>"
+mapping:
+  "@timestamp": "<time>"
+  "src.ip": "<src_ip>"
+  "dst.ip": "<dst_ip>"
+  "dst.port": "<dst_port>"
+  "rule.id": "<rule_id>"
+  "rule.name": "<attack_type>"
+  "event.category": "web"
+  "event.severity": "<risk>"
+  "event.outcome": "<action>"
+  "sime.threat_id": "lookup:<rule_id>"
+normalize:
+  "event.outcome":
+    阻断: deny
+    放行: allow
+    告警: alert
+threat_map:
+  "3000001": sime.tht.sqli
+  "3000002": sime.tht.xss
+  "3000003": sime.tht.webshell-upload
+  "3000004": sime.tht.scan
+sample: "time=2025-04-27 12:01:22 src_ip=203.0.113.41 dst_ip=10.2.86.30 dst_port=443 rule_id=3000001 attack_type=SQL注入攻击 risk=高 action=阻断"

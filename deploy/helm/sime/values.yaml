@@ -1,0 +1,60 @@
+# SIME Helm Chart 默认值（社区版单副本起步；企业版 HA 参数由交付包提供）
+replicaCount: 1
+
+image:
+  repository: ghcr.io/buaiqueyangi/sime-core
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: false
+  className: nginx
+  host: sime.example.local
+
+auth:
+  # 生产环境务必覆盖；secret 由 helm install --set-string auth.adminPassword=... 注入
+  adminUser: admin
+  adminPassword: "sime-change-me"
+  # 会话签名密钥（留空则每次发布全端下线）
+  jwtSecret: ""
+
+postgres:
+  external: false   # false = Chart 内置单机 PG（小型部署）；true = 使用 external.host 等参数
+  host: sime-postgres
+  port: 5432
+  user: sime
+  database: sime
+  password: "sime-change-me"
+  persistence:
+    enabled: true
+    size: 20Gi
+
+mqtt:
+  enabled: true
+  url: mqtt://sime-emqx:1883
+
+emqx:
+  enabled: true
+  ports: [1883, 18083]
+
+lake:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 10Gi
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

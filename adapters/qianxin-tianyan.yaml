@@ -1,0 +1,31 @@
+id: adapter.qianxin.tianyan
+vendor: 奇安信
+product: 天眼威胁检测与响应平台
+vendor_doc: "天眼分析平台 Syslog 格式说明 / 威胁类型分类 V1.0"
+protocol: syslog-tcp
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.time"
+  "src.ip": "$.sips"
+  "dst.ip": "$.dips"
+  "dst.asset_id": "lookup:$.dhost"
+  "event.name": "$.threat_name"
+  "event.category": "network-security"
+  "event.outcome": "detected"
+  "user.name": "$.account"
+  "event.severity": "lookup:$.level"
+  "sime.threat_id": "lookup:$.threat_id"
+normalize:
+  "event.severity":
+    "1": low
+    "2": medium
+    "3": high
+    "4": critical
+threat_map:
+  "60001": sime.tht.bruteforce
+  "60002": sime.tht.webshell-detect
+  "60003": sime.tht.c2
+  "60004": sime.tht.scan
+  "60005": sime.tht.data-exfil
+sample: '{"time":"2025-04-27 12:31:08","sips":"198.51.100.90","dips":"10.2.85.130","dhost":"WEB-PRD-02","threat_id":"60003","threat_name":"远控木马外联","level":"4","account":"svc-web"}'

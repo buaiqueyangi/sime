@@ -1,0 +1,16 @@
+id: adapter.generic.rfc5424-syslog
+vendor: 通用
+product: RFC 5424 标准 Syslog
+vendor_doc: "SIME 内置通用模板"
+protocol: syslog-udp
+parse:
+  format: regex
+  template: '^<(?<pri>\d{1,3})>(?<version>\d+)\s(?<time>\S+)\s(?<host>\S+)\s(?<appname>\S+)\s(?<procid>\S+)\s(?<msgid>\S+)\s(?<message>.+)$'
+mapping:
+  "@timestamp": "<time>"
+  "host.name": "<host>"
+  "log.syslog.facility": "lookup:<pri>"
+  "log.syslog.severity": "lookup:<pri>"
+  "event.category": "syslog"
+  "message": "<message>"
+sample: "<13>1 2025-04-27T13:10:01.000Z fw-edge-01 sime-agent 8710 - - upstream latency p99=180ms"

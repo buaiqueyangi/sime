@@ -1,0 +1,24 @@
+id: rule.host.ssh-bruteforce
+name: SSH 单源高频认证失败
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1110.001 密码猜解"]
+severity: high
+detection:
+  source: event.security.auth
+  window: 3m
+  group_by: ["src.ip"]
+  threshold: { failed_ssh: 15 }
+  condition: "event.category == 'authentication' and event.outcome == 'failure' and count() >= 15"
+  except: "src.asset.labels.role == 'scanner'"
+response:
+  default: ["firewall.block(src.ip, ttl=12h)", "ticket.create"]
+triage: >
+  Linux SSH 单源 3 分钟 15 次以上失败：确认为攻击源后封禁 12 小时；
+  若目标为主机资产，同步检查是否存在成功登录（结合 success-after-failures 规则）。
+references:
+  - https://attack.mitre.org/techniques/T1110/001/

@@ -1,0 +1,32 @@
+id: adapter.sangfor.edr
+vendor: 深信服
+product: 深信服 EDR（终端检测响应平台）
+vendor_doc: "深信服 EDR Syslog 字段示例"
+protocol: syslog-tcp
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.occur_time"
+  "src.ip": "$.client_ip"
+  "src.asset_id": "lookup:$.host_id"
+  "dst.ip": "$.remote_ip"
+  "event.name": "$.event_name"
+  "event.category": "endpoint"
+  "event.outcome": "detected"
+  "process.name": "$.process_name"
+  "file.path": "$.file_path"
+  "user.name": "$.user_name"
+  "event.severity": "lookup:$.level"
+  "sime.threat_id": "lookup:$.event_type"
+normalize:
+  "event.severity":
+    "1": low
+    "2": medium
+    "3": high
+    "4": critical
+threat_map:
+  "edr_mining": sime.tht.miner
+  "edr_ransomware": sime.tht.ransomware
+  "edr_reverse_shell": sime.tht.reverse-shell
+  "edr_bruteforce": sime.tht.bruteforce
+sample: '{"occur_time":"2025-04-27 12:40:55","client_ip":"10.2.88.20","host_id":"SF-EDR-1102","remote_ip":"1.2.3.9","event_type":"edr_mining","event_name":"检测到挖矿程序","level":"3","process_name":"kworkerds","file_path":"/usr/bin/kworkerds","user_name":"root"}'

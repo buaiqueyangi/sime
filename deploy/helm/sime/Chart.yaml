@@ -1,0 +1,16 @@
+apiVersion: v2
+name: sime
+description: SIME — 开源智慧集成管理平台（物联运维 + 安全运营一体化） | Open-source Smart Integrated Management Environment
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/buaiqueyangi/sime
+license: Apache-2.0
+keywords:
+  - iot
+  - siem
+  - soc
+  - monitoring
+  - sime
+maintainers:
+  - name: SIME Community

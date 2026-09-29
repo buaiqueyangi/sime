@@ -1,0 +1,24 @@
+id: adapter.generic.apache
+vendor: 通用
+product: Apache HTTP Server 访问日志
+vendor_doc: "SIME 内置通用模板（combined 格式）"
+protocol: file
+parse:
+  format: regex
+  template: '^(?<client_ip>\S+)\s(?<ident>\S+)\s(?<remote_user>\S+)\s\[(?<time>[^\]]+)\]\s"(?<method>[^"]*)"\s(?<status>\d{3})\s(?<body_bytes>[^"]*)\s"(?<referer>[^"]*)"\s"(?<user_agent>[^"]*)"'
+mapping:
+  "@timestamp": "<time>"
+  "src.ip": "<client_ip>"
+  "user.name": "<remote_user>"
+  "http.request.method": "<method>"
+  "http.response.status_code": "<status>"
+  "user_agent.original": "<user_agent>"
+  "event.category": "web"
+  "event.outcome": "lookup:<status>"
+normalize:
+  "event.outcome":
+    "2xx": allow
+    "3xx": allow
+    "4xx": deny
+    "5xx": failure
+sample: '10.8.20.55 - admin [27/Apr/2025:13:05:12 +0800] "GET /manager/html HTTP/1.1" 403 209 "-" "Mozilla/5.0 (X11; Linux x86_64)" "-"'

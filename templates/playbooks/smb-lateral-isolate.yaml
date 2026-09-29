@@ -1,0 +1,10 @@
+id: pb.smb-lateral.isolate
+name: SMB 横向移动源隔离
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.net.lateral-smb-anomaly
+steps:
+  - isolate.host(src.asset_id)
+  - notify.sec_team

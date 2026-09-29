@@ -1,0 +1,10 @@
+id: pb.sql-error.dev-escalate
+name: SQL 注入研发升级
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.web.sql-error-based
+steps:
+  - ticket.create(sla=60m)
+  - notify.owner(dst.asset_id)

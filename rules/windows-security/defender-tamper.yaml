@@ -1,0 +1,22 @@
+id: rule.win.defender-tamper
+name: 终端防护被关闭/篡改
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.001 削弱防御工具"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('av_disable','protection_tamper','defender_realtime_off')"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  防护关闭常为入侵前置动作：核实是否为运维变更；非计划内关闭立即恢复防护，
+  并对主机关联的近期告警做一次回溯研判。
+references:
+  - https://attack.mitre.org/techniques/T1562/001/

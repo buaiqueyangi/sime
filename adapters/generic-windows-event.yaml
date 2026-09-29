@@ -1,0 +1,25 @@
+id: adapter.generic.windows-event
+vendor: 通用
+product: Windows 安全事件（Sysmon/ForwardedEvents JSON 外发）
+vendor_doc: "SIME 内置通用模板（4625/4624/4688 映射）"
+protocol: json-http
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.EventTime"
+  "src.ip": "$.SourceIp"
+  "user.name": "$.TargetUserName"
+  "host.name": "$.Computer"
+  "event.code": "$.EventID"
+  "event.category": "authentication"
+  "event.outcome": "lookup:$.EventID"
+  "process.name": "$.ProcessName"
+normalize:
+  "event.outcome":
+    "4624": success
+    "4625": failure
+threat_map:
+  "4625": sime.tht.bruteforce
+  "4624": sime.tht.logon
+  "4688": sime.tht.process-create
+sample: '{"EventTime":"2025-04-27 13:01:44","SourceIp":"203.0.113.120","TargetUserName":"administrator","Computer":"FIN-DC-01","EventID":"4625","ProcessName":"-"}'

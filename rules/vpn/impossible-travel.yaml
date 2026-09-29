@@ -1,0 +1,22 @@
+id: rule.vpn.impossible-travel
+name: 同账号异地快速切换（不可行旅行）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: vpn
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1078.004 云账户"]
+severity: high
+detection:
+  source: event.security.auth
+  window: 30m
+  group_by: ["src.user.id"]
+  condition: "event.name == 'vpn_login' and count_distinct(src.geo.country) >= 2"
+response:
+  default: ["vpn.terminate(src.user.id)", "ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  同一账号 30 分钟内出现在两个及以上国家/地区，基本判定凭证泄露或共享：
+  终止会话、强制改密，并结合身份中心历史基线确认常用登录地。
+references:
+  - https://attack.mitre.org/techniques/T1078/004/

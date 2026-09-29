@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sime.fullname" . }}-core
+  labels:
+    {{- include "sime.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: sime-core
+    {{- include "sime.selectorLabels" . | nindent 4 }}
+---
+{{- if and .Values.mqtt.enabled .Values.emqx.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sime.fullname" . }}-emqx
+  labels:
+    {{- include "sime.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    {{- range .Values.emqx.ports }}
+    - port: {{ . }}
+      targetPort: {{ . }}
+      protocol: TCP
+    {{- end }}
+  selector:
+    app: sime-emqx
+    {{- include "sime.selectorLabels" . | nindent 4 }}
+{{- end }}

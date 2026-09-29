@@ -1,0 +1,11 @@
+id: pb.firmware-change.freeze
+name: 固件变更变更冻结
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.ot.firmware-manipulation
+steps:
+  - plc.halt(dst.asset.id)
+  - notify.ot_duty
+  - notify.sec_team

@@ -1,0 +1,22 @@
+id: rule.host.cryptomining-process
+name: 疑似挖矿进程/脚本执行
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0040 影响"]
+techniques: ["T1496 资源劫持"]
+severity: critical
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.name matches '(?i)(xmrig|cpuminer|minerd|stratum\\+tcp)' or process.command_line matches '(?i)stratum\\+tcp'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  挖矿程序常伴随 CPU 占用异常与矿池外联：确认进程路径与启动来源（crontab/服务），
+  排查同网段横向感染；清理后重点检查持久化项（计划任务、服务、SSH 公钥）。
+references:
+  - https://attack.mitre.org/techniques/T1496/

@@ -1,0 +1,10 @@
+id: pb.traversal.waf-block
+name: 目录穿越 WAF 封禁
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.web.path-traversal
+steps:
+  - firewall.block(src.ip, ttl=12h)
+  - notify.owner(dst.asset_id)

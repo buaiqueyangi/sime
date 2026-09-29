@@ -1,0 +1,23 @@
+id: rule.net.lateral-smb-anomaly
+name: 内网 SMB 横向移动异常
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: network-security
+tactics: ["TA0008 横向移动"]
+techniques: ["T1021.002 SMB/Windows 管理共享"]
+severity: high
+detection:
+  source: event.network.flow
+  window: 10m
+  group_by: ["src.asset_id"]
+  threshold: { smb_targets: 10 }
+  condition: "network.transport == 'smb' and dst.port == 445 and count_distinct(dst.asset_id) >= 10"
+response:
+  default: ["isolate.host(src.asset_id)", "ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  单源大面积 445 端口访问是蠕虫/横向移动特征（如 EternalBlue 扫描）：
+  立即隔离源主机，排查其管理员共享会话与近期漏洞利用痕迹。
+references:
+  - https://attack.mitre.org/techniques/T1021/002/

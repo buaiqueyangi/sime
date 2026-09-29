@@ -1,0 +1,28 @@
+id: adapter.f5.bigip
+vendor: F5
+product: BIG-IP 应用交付/AFM
+vendor_doc: "F5-威胁分类 Syslog 字典"
+protocol: syslog-udp
+parse:
+  format: kv
+  template: "date=<date> src_ip=<src_ip> dest_ip=<dst_ip> dest_port=<dst_port> attack_type=<attack_type> severity=<severity> enforce_policy=<action>"
+mapping:
+  "@timestamp": "<date>"
+  "src.ip": "<src_ip>"
+  "dst.ip": "<dst_ip>"
+  "dst.port": "<dst_port>"
+  "rule.name": "<attack_type>"
+  "event.category": "web"
+  "event.severity": "<severity>"
+  "event.outcome": "<action>"
+  "sime.threat_id": "lookup:<attack_type>"
+normalize:
+  "event.outcome":
+    blocked: deny
+    alerted: alert
+    passed: allow
+threat_map:
+  "SQL Injection": sime.tht.sqli
+  "Cross Site Scripting": sime.tht.xss
+  "HTTP Protocol Compliance": sime.tht.scan
+sample: "date=2025-04-27 12:20:11 src_ip=203.0.113.55 dest_ip=10.2.86.40 dest_port=443 attack_type=SQL Injection severity=critical enforce_policy=blocked"

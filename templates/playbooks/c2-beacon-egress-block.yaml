@@ -1,0 +1,10 @@
+id: pb.c2-beacon.egress-block
+name: C2 心跳出口阻断
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.net.c2-beacon-interval
+steps:
+  - firewall.block(src.asset_id, egress=true)
+  - isolate.host(src.asset_id)

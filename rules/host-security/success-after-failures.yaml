@@ -1,0 +1,22 @@
+id: rule.host.success-after-failures
+name: 多次认证失败后的成功登录
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0006 凭证访问", "TA0001 初始访问"]
+techniques: ["T1078 有效账户"]
+severity: high
+detection:
+  source: event.security.auth
+  window: 30m
+  group_by: ["src.ip", "dst.asset_id"]
+  condition: "sequence([event.outcome == 'failure', event.outcome == 'failure', event.outcome == 'failure', event.outcome == 'failure', event.outcome == 'failure', event.outcome == 'success']) within 30m"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  同源同目标多次失败后出现成功登录，符合口令喷洒/猜解得手模式：核实成功登录账号是否计划内，
+  结合账号行为基线与登录时间判断；确认失陷立即锁定账号并排查持久化。
+references:
+  - https://attack.mitre.org/techniques/T1078/

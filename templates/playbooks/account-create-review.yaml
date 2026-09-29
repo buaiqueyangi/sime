@@ -1,0 +1,10 @@
+id: pb.account-create.review
+name: 非工作时间建户审查工单
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.host.account-created-offhours
+steps:
+  - account.suspend(user.name)
+  - notify.sec_team

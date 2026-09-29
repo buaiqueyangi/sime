@@ -1,0 +1,23 @@
+id: rule.win.logon-4625-burst
+name: Windows 登录失败风暴（4625）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1110.003 密码喷洒"]
+severity: high
+detection:
+  source: adapter.qianxin.tianqing
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { failed_logon: 30 }
+  condition: "event.code == '4625' and count() >= 30"
+response:
+  default: ["firewall.block(src.ip, ttl=12h)", "ticket.create"]
+triage: >
+  4625 高频对应口令喷洒/爆破：按源地址封禁；重点排查是否存在同一源对多账号的
+  喷洒行为（域环境联动身份中心核对受影响账户）。
+references:
+  - https://attack.mitre.org/techniques/T1110/003/

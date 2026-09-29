@@ -1,0 +1,10 @@
+id: pb.audit-clear.isolate
+name: 日志清除主机隔离
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.host.audit-log-clear
+steps:
+  - isolate.host(dst.asset_id)
+  - notify.sec_team

@@ -1,0 +1,10 @@
+id: pb.vpn-scan.terminate
+name: VPN 扫描行为会话终止
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.vpn.port-scan.high-freq
+steps:
+  - vpn.terminate(src.user.id)
+  - notify.owner(src.user.id)

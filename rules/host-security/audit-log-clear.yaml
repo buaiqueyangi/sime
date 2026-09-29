@@ -1,0 +1,22 @@
+id: rule.host.audit-log-clear
+name: 审计/安全日志被清除
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1070.002 清除 Linux 日志"]
+severity: critical
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('audit_log_clear','log_file_deleted') or (event.category == 'file' and file.path matches '.*(wtmp|btmp|secure|auth\\.log|lastlog)$' and event.action == 'delete')"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  日志清除是入侵收尾动作（比对平台侧留存日志即可确认）：立即隔离并依托平台时序
+  留痕回溯清理前的行为链；核实操作账号与运维变更记录是否匹配。
+references:
+  - https://attack.mitre.org/techniques/T1070/002/

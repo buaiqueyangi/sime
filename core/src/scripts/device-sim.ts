@@ -34,6 +34,24 @@ let published = 0;
 
 client.on('connect', () => {
   console.log(`[sime-sim] connected ${url} (interval=${intervalMs}ms, burst=${burstSec}s, loop=${loop})`);
+  const flood = Number(arg('--flood', '0'));
+  if (flood > 0) {
+    // 接入压测：全速发布 flood 条遥测后退出（QoS1：EMQX 为慢订阅者排队，保证送达）
+    console.log(`[sime-sim] flood mode: publishing ${flood} telemetry messages (qos1)...`);
+    const t0 = Date.now();
+    for (let i = 0; i < flood; i++) {
+      const payload = JSON.stringify({
+        asset_id: `dev-bench-${i % 1000}`,
+        kind: 'bench',
+        ts: new Date().toISOString(),
+        points: { load_percent: Math.round((i % 100) * 100) / 100 },
+      });
+      client.publish(`sime/v1/dev-bench-${i % 1000}/telemetry`, payload, { qos: 1 });
+    }
+    console.log(`[sime-sim] published ${flood} msgs in ${Date.now() - t0}ms (发布侧)`);
+    setTimeout(() => { console.log('[sime-sim] flood done'); process.exit(0); }, 15000);
+    return;
+  }
   setInterval(tick, intervalMs);
   // 首轮突发延迟：等待订阅方（sime-core）完成 EMQX 订阅，非保留消息先发会丢
   setTimeout(burst, 8000);

@@ -1,0 +1,23 @@
+id: rule.ot.modbus-function-code-anomaly
+name: Modbus 功能码偏离基线
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0110 ICS 操纵"]
+techniques: ["T0855 未授权指令消息"]
+severity: high
+detection:
+  source: adapter.ot.modbus-audit
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and count_distinct(modbus.function_code) >= 6"
+  except: "src.asset_id.id in dst.asset.security.command_allowlist"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=15m)", "notify.ot_duty"]
+triage: >
+  正常主站的功能码集合稳定（读保持寄存器/写寄存器等），出现罕见功能码（如
+  诊断、写入多个文件）提示异常工具接入：核对功能码与工单，必要时阻断并抓包取证。
+references:
+  - https://attack.mitre.org/techniques/T0855/

@@ -1,0 +1,23 @@
+id: rule.web.path-traversal
+name: 路径穿越探测/利用
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0001 初始访问"]
+techniques: ["T1083 文件与目录发现"]
+severity: medium
+detection:
+  source: adapter.generic.nginx-access
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { traversal_requests: 5 }
+  condition: "url.path matches '.*\\.\\./.*' or url.query matches '(?i).*(\\.\\.%2f|%2e%2e%2f|\\.\\./\\.\\.).*'"
+response:
+  default: ["firewall.block(src.ip, ttl=12h)", "ticket.create"]
+triage: >
+  目录穿越探测通常为自动化扫描前置行为：封禁源 IP 并核对目标应用是否存在
+  文件读取类接口；确认被读取的敏感文件范围并评估泄露影响。
+references:
+  - https://attack.mitre.org/techniques/T1083/

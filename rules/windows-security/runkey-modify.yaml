@@ -1,0 +1,22 @@
+id: rule.win.runkey-modify
+name: 注册表 Run 启动项写入
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持"]
+techniques: ["T1547.001 注册表启动项"]
+severity: medium
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "registry.path matches '(?i)\\\\Software\\\\(Microsoft\\\\)?Windows\\\\CurrentVersion\\\\Run'"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+triage: >
+  Run 键为用户态持久化经典位置：比对写入进程与软件安装记录；未知程序写入
+  提取文件哈希送情报比对，确认恶意后清理注册表项并删除落盘文件。
+references:
+  - https://attack.mitre.org/techniques/T1547/001/

@@ -1,0 +1,10 @@
+id: pb.modbus-anomaly.review
+name: Modbus 功能码异常核查
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.ot.modbus-function-code-anomaly
+steps:
+  - notify.ot_duty
+  - ticket.create(sla=30m)

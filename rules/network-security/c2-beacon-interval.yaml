@@ -1,0 +1,25 @@
+id: rule.net.c2-beacon-interval
+name: 固定间隔外联心跳（C2 信标特征）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: network-security
+tactics: ["TA0011 命令与控制"]
+techniques: ["T1071 应用层协议"]
+severity: high
+detection:
+  source: event.network.flow
+  window: 30m
+  group_by: ["src.asset_id", "dst.ip"]
+  threshold: { connections: 20 }
+  condition: "count() >= 20 and network.direction == 'outbound' and dst.asset_id == null"
+  except: "event.category == '__none__'"
+response:
+  default: ["firewall.block(src.asset_id, egress=true)", "ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  固定间隔外联是信标回连的典型特征（结合威胁情报核实目的 IP 信誉）；
+  先对出口阻断再排查主机进程，留存会话五元组用于溯源。
+  v0 引擎暂不支持 CIDR 白名单：内网目的地址白名单在 v1（CIDR 匹配函数）接入后启用。
+references:
+  - https://attack.mitre.org/techniques/T1071/

@@ -1,0 +1,23 @@
+id: rule.email.outbound-spam-burst
+name: 外发邮件突发（垃圾邮件/钓鱼外发）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: email
+tactics: ["TA0011 命令与控制"]
+techniques: ["T1534 内部钓鱼"]
+severity: medium
+detection:
+  source: event.email.flow
+  window: 10m
+  group_by: ["src.user.id"]
+  threshold: { outbound: 50 }
+  condition: "email.direction == 'outbound' and count() >= 50"
+response:
+  default: ["mail.throttle(src.user.id)", "ticket.create", "notify.sec_team"]
+triage: >
+  账号短时间大量外发多为被利用发垃圾邮件/内部钓鱼：限流后核实邮件内容与
+  收件人范围；确认失陷立即改密并排查会话来源。
+references:
+  - https://attack.mitre.org/techniques/T1534/

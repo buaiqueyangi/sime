@@ -1,0 +1,10 @@
+id: pb.dns-tunnel.egress-block
+name: DNS 隧道出口阻断
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.net.dns-tunnel-heuristic
+steps:
+  - firewall.block(src.asset_id, egress=true)
+  - isolate.host(src.asset_id)

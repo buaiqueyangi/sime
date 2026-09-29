@@ -1,0 +1,22 @@
+id: rule.web.sql-error-based
+name: SQL 注入（报错回显特征）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0001 初始访问"]
+techniques: ["T1190 利用面向公众的应用程序"]
+severity: high
+detection:
+  source: adapter.safeline.waf
+  window: 1m
+  group_by: ["src.ip"]
+  condition: "http.response.body.content matches '(?i).*(SQL syntax|ORA-[0-9]|MySQLSyntaxErrorException|pg_query).*' or url.query matches '(?i).*(union.*select|select.*from.*information_schema).*'"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create(sla=15m)"]
+triage: >
+  响应体出现数据库报错或请求携带 union/information_schema 特征：确认目标应用
+  是否存在注入点，转交研发修复而非仅依赖 WAF 拦截。
+references:
+  - https://attack.mitre.org/techniques/T1190/

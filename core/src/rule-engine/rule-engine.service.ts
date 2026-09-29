@@ -107,14 +107,40 @@ export class RuleEngineService implements OnModuleInit {
   }
 
   private onModuleInitEngine(): void {
-    const defs = this.registry.get('rules').entries.map(({ file, data }) => {
+    // 逐条编译：单条坏规则只跳过并告警，绝不杀死整个平台（生产教训）
+    const defs = this.registry.get('rules').entries;
+    const valid: SimeRule[] = [];
+    let failed = 0;
+    for (const { file, data } of defs) {
       try {
-        return data as unknown as SimeRule;
+        valid.push(data as unknown as SimeRule);
       } catch (e) {
-        throw new Error(`规则编译失败 ${file}: ${e instanceof Error ? e.message : String(e)}`);
+        failed++;
+        this.logger.error(`规则装载失败 ${file}: ${e instanceof Error ? e.message : String(e)}`);
       }
-    });
-    this.engine = new RuleEngine(defs);
-    this.logger.log(`rules compiled: ${this.engine.rules.length}`);
+    }
+    try {
+      this.engine = new RuleEngine(valid);
+      this.logger.log(`rules compiled: ${this.engine.rules.length}${failed ? `（${failed} 条装载失败已跳过）` : ''}`);
+      this.compileFailures = failed;
+    } catch (e) {
+      // RuleEngine 构造期（条件编译）失败：定位坏规则并跳过
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`规则批量编译失败，进入逐条定位: ${msg}`);
+      this.engine = new RuleEngine([]);
+      for (const { file, data } of defs) {
+        try {
+          const probe = new RuleEngine([data as unknown as SimeRule]);
+          this.engine.rules.push(...probe.rules);
+        } catch {
+          failed++;
+          this.logger.error(`跳过坏规则 ${file}: ${msg}`);
+        }
+      }
+      this.compileFailures = failed;
+      this.logger.warn(`rules compiled (degraded): ${this.engine.rules.length}, skipped ${failed}`);
+    }
   }
+
+  private compileFailures = 0;
 }

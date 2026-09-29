@@ -1,0 +1,11 @@
+id: pb.cryptomine.isolate
+name: 挖矿主机自动隔离
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.host.cryptomining-process
+steps:
+  - isolate.host(dst.asset_id)
+  - process.kill(process.name)
+  - notify.owner(dst.asset_id)

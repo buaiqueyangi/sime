@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sime.fullname" . }}-core
+  labels:
+    {{- include "sime.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: sime-core
+      {{- include "sime.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app: sime-core
+        {{- include "sime.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: core
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "sime.fullname" . }}-config
+          env:
+            - name: SIME_PG_HOST
+              value: {{ .Values.postgres.host | quote }}
+            - name: SIME_PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sime.fullname" . }}-secret
+                  key: pg-password
+            - name: SIME_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sime.fullname" . }}-secret
+                  key: admin-password
+            {{- if .Values.auth.jwtSecret }}
+            - name: SIME_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "sime.fullname" . }}-secret
+                  key: auth-secret
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: lake-data
+              mountPath: /app/data
+      volumes:
+        - name: lake-data
+        {{- if .Values.lake.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "sime.fullname" . }}-lake
+        {{- else }}
+          emptyDir: {}
+        {{- end }}

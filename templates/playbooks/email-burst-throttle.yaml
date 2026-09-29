@@ -1,0 +1,10 @@
+id: pb.email-burst.throttle
+name: 邮件突发限流
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.email.outbound-spam-burst
+steps:
+  - mail.throttle(src.user.id)
+  - notify.sec_team
