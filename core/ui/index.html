@@ -7,67 +7,158 @@
   <link rel="stylesheet" href="/ui/style.css" />
 </head>
 <body>
-  <header>
-    <div class="logo">SIME<span>智慧集成管理平台 · 物联运维 + 安全运营</span></div>
-    <div id="health" class="badge">加载中…</div>
-    <nav><a href="/docs">API 文档</a><a href="https://github.com/buaiqueyangi/sime">GitHub</a></nav>
-  </header>
-  <main>
-    <section class="cards" id="cards"></section>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">S</div>
+      <div class="brand-text">SIME<small>智慧集成管理平台</small></div>
+    </div>
+    <nav id="nav">
+      <a data-view="overview" class="active">
+        <svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z"/></svg>概览
+      </a>
+      <a data-view="alerts"><svg viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 0-6 6v4l-2 4h16l-2-4V8a6 6 0 0 0-6-6zm-2 16a2 2 0 0 0 4 0z"/></svg>实时告警<span id="navAlertDot" class="nav-dot hidden"></span></a>
+      <a data-view="telemetry"><svg viewBox="0 0 24 24"><path d="M4 20V10m5 10V4m5 16v-7m5 7V8" stroke-width="2.4" stroke-linecap="round" fill="none" class="stroke"/></svg>设备遥测</a>
+      <a data-view="rules"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z"/></svg>检测规则库</a>
+      <a data-view="catalog"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>适配与物模型</a>
+      <a data-view="response"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.2 9 19.2 20 8.2l-1.5-1.5z"/></svg>处置闭环</a>
+    </nav>
+    <div class="side-foot">
+      <a href="/docs" target="_blank">API 文档</a>
+      <a href="https://github.com/buaiqueyangi/sime" target="_blank">GitHub</a>
+      <span class="ver">v0.1.0 · Apache-2.0</span>
+    </div>
+  </aside>
 
-    <section class="panel">
-      <div class="panel-head">
-        <h2>安全告警</h2>
-        <button id="simulate">▶ 模拟攻击回放</button>
-        <button id="reset" class="ghost">重置引擎</button>
-        <span id="simNote" class="note"></span>
+  <div class="shell">
+    <header class="topbar">
+      <h1 id="viewTitle">概览</h1>
+      <div class="top-actions">
+        <div id="health" class="status-pill"><span class="pulse"></span><span class="status-text">连接中…</span></div>
+        <button id="simulate" class="btn primary">▶ 模拟攻击回放</button>
+        <button id="reset" class="btn ghost">重置引擎</button>
       </div>
-      <table>
-        <thead><tr><th>时间</th><th>级别</th><th>域</th><th>规则</th><th>分组</th><th>研判摘要</th></tr></thead>
-        <tbody id="alerts"><tr><td colspan="6" class="empty">暂无告警 —— 点击「模拟攻击回放」看引擎实时检出</td></tr></tbody>
-      </table>
-    </section>
+    </header>
 
-    <section class="panel">
-      <div class="panel-head">
-        <h2>设备遥测</h2>
-        <select id="telAsset"></select>
-        <select id="telPoint"></select>
-        <span id="telNote" class="note">实时曲线 · 2s 刷新</span>
-      </div>
-      <div id="chart" class="chart"></div>
-      <table>
-        <thead><tr><th>资产</th><th>测点</th><th>最新值</th><th>时间</th></tr></thead>
-        <tbody id="telLatest"><tr><td colspan="4" class="empty">等待设备接入（sim profile 或 MQTT 发布到 sime/v1/{deviceId}/telemetry）</td></tr></tbody>
-      </table>
-    </section>
-
-    <section class="panel">
-      <div class="panel-head"><h2>检测规则库 <span id="ruleCount" class="count"></span></h2></div>
-      <table>
-        <thead><tr><th>规则 ID</th><th>名称</th><th>域</th><th>类别</th><th>级别</th><th>MITRE ATT&CK</th></tr></thead>
-        <tbody id="rules"></tbody>
-      </table>
-    </section>
-
-    <section class="cols">
-      <section class="panel">
-        <div class="panel-head"><h2>日志源适配库</h2></div>
-        <table>
-          <thead><tr><th>适配器</th><th>厂商 / 产品</th><th>协议</th><th>威胁字典</th></tr></thead>
-          <tbody id="adapters"></tbody>
-        </table>
+    <main>
+      <!-- 概览 -->
+      <section id="view-overview" class="view active">
+        <div class="cards" id="cards"></div>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-head"><h2>最新告警</h2><a class="link" data-goto="alerts">全部 →</a></div>
+            <table><tbody id="ovAlerts"></tbody></table>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>平台组件</h2></div>
+            <table><tbody id="ovComponents"></tbody></table>
+          </div>
+        </div>
       </section>
-      <section class="panel">
-        <div class="panel-head"><h2>物模型模板</h2></div>
-        <table>
-          <thead><tr><th>模板</th><th>类别</th><th>属性</th><th>事件</th><th>安全</th></tr></thead>
-          <tbody id="models"></tbody>
-        </table>
+
+      <!-- 实时告警 -->
+      <section id="view-alerts" class="view">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>告警流</h2>
+            <div class="chips" id="sevChips">
+              <button data-sev="all" class="chip active">全部</button>
+              <button data-sev="critical" class="chip">critical</button>
+              <button data-sev="high" class="chip">high</button>
+              <button data-sev="medium" class="chip">medium</button>
+              <button data-sev="low" class="chip">low</button>
+            </div>
+            <span class="note" id="alertNote"></span>
+          </div>
+          <table>
+            <thead><tr><th>时间</th><th>级别</th><th>域</th><th>规则</th><th>分组</th><th>处置动作</th><th>研判摘要</th></tr></thead>
+            <tbody id="alerts"></tbody>
+          </table>
+        </div>
       </section>
-    </section>
-  </main>
-  <footer>SIME v0.1.0 · Apache-2.0 · 社区版全功能 · 数据 3s 自动刷新</footer>
+
+      <!-- 设备遥测 -->
+      <section id="view-telemetry" class="view">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>实时曲线</h2>
+            <select id="telAsset"></select>
+            <select id="telPoint"></select>
+            <span class="note">2s 轮询 · ECharts</span>
+          </div>
+          <div id="chart" class="chart"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>测点最新值</h2></div>
+          <table>
+            <thead><tr><th>资产</th><th>测点</th><th>最新值</th><th>更新时间</th></tr></thead>
+            <tbody id="telLatest"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 规则库 -->
+      <section id="view-rules" class="view">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>检测规则库 <span id="ruleCount" class="count"></span></h2>
+            <div class="chips" id="ruleDomainChips">
+              <button data-domain="all" class="chip active">全部</button>
+              <button data-domain="it" class="chip">it</button>
+              <button data-domain="ot" class="chip">ot</button>
+              <button data-domain="merged" class="chip">merged</button>
+            </div>
+          </div>
+          <table>
+            <thead><tr><th>规则 ID</th><th>名称</th><th>域</th><th>类别</th><th>级别</th><th>MITRE ATT&CK</th></tr></thead>
+            <tbody id="rules"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 适配与物模型 -->
+      <section id="view-catalog" class="view">
+        <div class="cols">
+          <div class="panel">
+            <div class="panel-head"><h2>日志源适配库</h2></div>
+            <table>
+              <thead><tr><th>适配器</th><th>厂商 / 产品</th><th>协议</th><th>威胁字典</th></tr></thead>
+              <tbody id="adapters"></tbody>
+            </table>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>物模型模板</h2></div>
+            <table>
+              <thead><tr><th>模板</th><th>类别</th><th>属性/事件</th><th>安全</th></tr></thead>
+              <tbody id="models"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 处置闭环 -->
+      <section id="view-response" class="view">
+        <div class="cols">
+          <div class="panel">
+            <div class="panel-head"><h2>工单（ticket.create）</h2></div>
+            <table><tbody id="rTickets"></tbody></table>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>通知（notify.*）</h2></div>
+            <table><tbody id="rNotify"></tbody></table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>响应动作审计（firewall.block / isolate.host / plc.deny …）</h2></div>
+          <table>
+            <thead><tr><th>时间</th><th>动作</th><th>目标</th><th>状态</th></tr></thead>
+            <tbody id="rAudit"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toasts"></div>
   <script src="/ui/vendor/echarts.min.js"></script>
   <script src="/ui/app.js"></script>
 </body>

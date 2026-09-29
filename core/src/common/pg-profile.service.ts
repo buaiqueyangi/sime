@@ -26,6 +26,9 @@ interface TicketsRow {
   alert_id: number | null;
   title: string;
   state: Generated<string>;
+  assignee: string | null;
+  created_at: Generated<Date>;
+  closed_at: Date | null;
 }
 interface NotificationsRow {
   id: Generated<number>;

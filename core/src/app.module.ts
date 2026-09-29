@@ -7,6 +7,7 @@ import { AdaptersController } from './modules/adapters/adapters.controller';
 import { ThingModelsController } from './modules/thing-model/thing-model.controller';
 import { AlertsController } from './modules/alerts/alerts.controller';
 import { PipelineController } from './modules/pipeline/pipeline.controller';
+import { ResponsesController } from './modules/responses/responses.controller';
 import { TelemetryController } from './telemetry/telemetry.controller';
 import { TelemetryService } from './telemetry/telemetry.service';
 import { MqttIngestService } from './ingest/mqtt-ingest.service';
@@ -22,6 +23,7 @@ import { RuleEngineService } from './rule-engine/rule-engine.service';
     AlertsController,
     PipelineController,
     TelemetryController,
+    ResponsesController,
   ],
   providers: [
     AssetRegistryService,
