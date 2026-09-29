@@ -1,0 +1,23 @@
+id: rule.ot.telemetry-range-breach
+name: 遥测越限（超出物模型量程）
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0110 ICS 操纵"]
+techniques: ["T0836 操纵视图"]
+severity: medium
+detection:
+  source: event.telemetry
+  window: 1m
+  group_by: ["src.asset.id"]
+  condition: "event.name == 'range_breach'"
+response:
+  default: ["ticket.create(sla=60m)", "notify.ot_duty"]
+triage: >
+  测点值超出物模型声明的量程（telemetry.range_breach）：优先判断是传感器故障漂移还是
+  真实工况越限；结合同设备其他测点交叉验证。持续越限按设备异常处置并通知运维；
+  短时单点毛刺可结合历史曲线排除干扰。该规则由遥测写入路径自动触发（M1）。
+references:
+  - https://attack.mitre.org/techniques/T0836/

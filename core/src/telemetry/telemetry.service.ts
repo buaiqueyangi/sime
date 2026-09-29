@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PgProfileService } from '../common/pg-profile.service';
+import { AssetRegistryService } from '../common/asset-registry.service';
+import { RuleEngineService } from '../rule-engine/rule-engine.service';
 
 /**
  * 遥测服务（M1）：内存实时档 + PG 持久档双轨。
  * 查询永远先走内存（实时性），重启后内存为空时回源 PG；
+ * 写入路径做物模型量程检查，越限自动产生 range_breach 事件进规则引擎（遥测越限告警）。
  * 规模上来后此接口平移时序库 profile（蓝图 §6.1），上层不动。
  */
 export interface TelemetryPoint {
@@ -15,14 +18,36 @@ export interface TelemetryPoint {
 
 const SERIES_CAP = 1200;
 
+interface PointRange {
+  min: number;
+  max: number;
+}
+
 @Injectable()
 export class TelemetryService {
   private readonly logger = new Logger('Telemetry');
   private latestMap = new Map<string, { ts: number; value: number }>();
   private seriesMap = new Map<string, { ts: number; value: number }[]>();
   private deviceMap = new Map<string, { assetId: string; kind: string; firstSeen: number; lastSeen: number }>();
+  private rangeMap = new Map<string, PointRange>();
 
-  constructor(private readonly pg: PgProfileService) {}
+  constructor(
+    private readonly pg: PgProfileService,
+    private readonly registry: AssetRegistryService,
+    private readonly engine: RuleEngineService,
+  ) {}
+
+  /** 从物模型模板聚合各测点量程（点名唯一时生效），供越限检查。 */
+  private buildRangeMap(): void {
+    for (const { data } of this.registry.get('thing-models').entries) {
+      const props = (data['properties'] as { id?: string; range?: number[] }[]) ?? [];
+      for (const p of props) {
+        if (p.id && Array.isArray(p.range) && p.range.length === 2 && !this.rangeMap.has(p.id)) {
+          this.rangeMap.set(p.id, { min: p.range[0]!, max: p.range[1]! });
+        }
+      }
+    }
+  }
 
   registerDevice(deviceId: string, assetId: string, kind = 'device'): void {
     const prev = this.deviceMap.get(deviceId);
@@ -50,6 +75,7 @@ export class TelemetryService {
   }
 
   record(points: TelemetryPoint[]): void {
+    if (!this.rangeMap.size) this.buildRangeMap();
     const db = this.pg.database;
     const rows: { asset_id: string; point: string; ts: Date; value: number }[] = [];
     for (const p of points) {
@@ -63,6 +89,21 @@ export class TelemetryService {
       s.push({ ts: p.ts, value: p.value });
       if (s.length > SERIES_CAP) s.splice(0, s.length - SERIES_CAP);
       if (db) rows.push({ asset_id: p.assetId, point: p.point, ts: new Date(p.ts), value: p.value });
+
+      // 物模型量程越限 → range_breach 事件 → 规则引擎（遥测越限告警）
+      const range = this.rangeMap.get(p.point);
+      if (range && (p.value < range.min || p.value > range.max)) {
+        this.engine.feed(
+          {
+            event: { category: 'telemetry', name: 'range_breach', outcome: 'failure' },
+            src: { asset: { id: p.assetId } },
+            sime: { domain: 'ot' },
+            telemetry: { point: p.point, value: p.value, range: [range.min, range.max] },
+            '@timestamp': new Date(p.ts).toISOString(),
+          },
+          p.ts,
+        );
+      }
     }
     if (db && rows.length) {
       void db
@@ -92,7 +133,7 @@ export class TelemetryService {
     }
     const db = this.pg.database;
     if (!db) return [];
-    const rows = await db.selectFrom('point_latest').selectAll().orderBy('ts desc').limit(200).execute();
+    const rows = await db.selectFrom('point_latest').selectAll().orderBy('ts', 'desc').limit(200).execute();
     return rows.map((r) => ({ assetId: r.asset_id, point: r.point, ts: new Date(r.ts).getTime(), value: r.value }));
   }
 
@@ -106,12 +147,10 @@ export class TelemetryService {
       .select(['ts', 'value'])
       .where('asset_id', '=', assetId)
       .where('point', '=', point)
-      .orderBy('ts desc')
+      .orderBy('ts', 'desc')
       .limit(limit)
       .execute();
-    return rows
-      .map((r) => ({ ts: new Date(r.ts).getTime(), value: r.value }))
-      .reverse();
+    return rows.map((r) => ({ ts: new Date(r.ts).getTime(), value: r.value })).reverse();
   }
 
   devices(): { deviceId: string; assetId: string; kind: string; lastSeen: number }[] {

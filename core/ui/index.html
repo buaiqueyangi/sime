@@ -7,6 +7,20 @@
   <link rel="stylesheet" href="/ui/style.css" />
 </head>
 <body>
+  <!-- 登录 -->
+  <div id="loginView" class="login-wrap hidden">
+    <div class="login-card">
+      <div class="brand-mark" style="margin: 0 auto 12px">S</div>
+      <h1>SIME 控制台</h1>
+      <p class="dim" style="margin: 4px 0 18px">智慧集成管理平台 · 登录</p>
+      <input id="loginUser" placeholder="用户名" value="admin" />
+      <input id="loginPass" type="password" placeholder="密码" />
+      <button id="loginBtn" class="btn primary" style="width: 100%">登 录</button>
+      <p class="note" id="loginErr" style="color: var(--crit); min-height: 18px"></p>
+      <p class="note dim">默认账号 admin / sime123456 · 可用环境变量 SIME_ADMIN_PASSWORD 修改</p>
+    </div>
+  </div>
+
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark">S</div>
@@ -43,6 +57,10 @@
       <!-- 概览 -->
       <section id="view-overview" class="view active">
         <div class="cards" id="cards"></div>
+        <div class="panel">
+          <div class="panel-head"><h2>告警趋势（24h 按小时）</h2><span id="trendNote" class="note"></span></div>
+          <div id="trend" class="chart-sm"></div>
+        </div>
         <div class="grid-2">
           <div class="panel">
             <div class="panel-head"><h2>最新告警</h2><a class="link" data-goto="alerts">全部 →</a></div>

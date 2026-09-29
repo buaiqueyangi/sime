@@ -3,8 +3,10 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import type { NextFunction, Request, Response } from 'express';
 import * as path from 'path';
 import { AppModule } from './app.module';
+import { AuthService } from './auth/auth.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -23,6 +25,17 @@ async function bootstrap() {
   app.enableCors();
   app.enableShutdownHooks(); // Linux 生产：SIGTERM 优雅退出（compose/systemd 滚动重启零丢事件）
 
+  // 认证守卫：/api/v1 全保护，豁免 login 与 health（健康检查/登录前状态）
+  const auth = app.get(AuthService);
+  app.use('/api/v1', (req: Request, res: Response, next: NextFunction) => {
+    const p = req.path;
+    if (p === '/auth/login' || p === '/health') return next();
+    const user = auth.verify(String(req.headers.authorization || '').replace(/^Bearer /, ''));
+    if (!user) return res.status(401).json({ message: 'unauthorized' });
+    (req as unknown as { user: unknown }).user = user;
+    next();
+  });
+
   // 控制台页面（vanilla 静态资源，构建期拷贝到 dist/ui）
   app.useStaticAssets(path.join(__dirname, 'ui'), { prefix: '/ui' });
 
@@ -36,7 +49,7 @@ async function bootstrap() {
 
   const port = Number(process.env.SIME_PORT ?? 3000);
   await app.listen(port, '0.0.0.0');
-  console.log(`[sime-core] listening on :${port} (console /ui, docs /docs, prefix /api/v1)`);
+  console.log(`[sime-core] listening on :${port} (console /ui, docs /docs, prefix /api/v1 · auth on)`);
 }
 
 void bootstrap();

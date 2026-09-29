@@ -11,11 +11,40 @@ const rel = (ts) => {
 };
 const hhmmss = (ts) => new Date(ts).toLocaleTimeString('zh-CN', { hour12: false });
 
-async function jget(url) {
-  const r = await fetch(url);
+async function jget(url, opts = {}) {
+  const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + (localStorage.getItem('sime_token') || '') } });
+  if (r.status === 401) {
+    showLogin(true);
+    throw new Error('未登录或会话已过期');
+  }
   if (!r.ok) throw new Error(`${url} → ${r.status}`);
   return r.json();
 }
+
+/* ===== 登录 ===== */
+function showLogin(show) {
+  $('loginView').classList.toggle('hidden', !show);
+}
+
+$('loginBtn').onclick = async () => {
+  $('loginErr').textContent = '';
+  try {
+    const r = await fetch('/api/v1/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: $('loginUser').value, password: $('loginPass').value }),
+    });
+    if (!r.ok) throw new Error((await r.json()).message || '登录失败');
+    const j = await r.json();
+    localStorage.setItem('sime_token', j.token);
+    showLogin(false);
+    lastAlertCount = -1;
+    toast(`欢迎回来，${j.user}`);
+    refreshHealth(); refreshAlerts(); refreshRules(); refreshCatalog(); refreshTelemetry();
+  } catch (e) {
+    $('loginErr').textContent = e.message;
+  }
+};
+$('loginPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('loginBtn').click(); });
 
 function toast(msg, isErr = false) {
   const t = document.createElement('div');
@@ -51,6 +80,7 @@ async function refreshHealth() {
     pill.innerHTML = `<span class="pulse"></span><span class="status-text">运行中 · 告警 ${fmtN(health.ruleEngine.alerts)} · 存储 ${health.pgProfile === 'active' ? 'PostgreSQL' : '内存'}</span>`;
     pill.classList.remove('err');
     if (currentView === 'overview') renderOverview();
+    if (currentView === 'overview') refreshTrend();
     return health;
   } catch (e) {
     $('health').classList.add('err');
@@ -139,11 +169,10 @@ async function simulate(reset) {
   const btn = $('simulate');
   btn.disabled = true;
   try {
-    const resp = await fetch('/api/v1/pipeline/simulate', {
+    const j = await jget('/api/v1/pipeline/simulate', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reset: !!reset }),
     });
-    const j = await resp.json();
     toast(`回放 ${j.events} 条事件 → 新增 ${j.newAlerts} 条告警（累计 ${j.stats.alerts}）`);
   } catch (e) {
     toast('回放失败: ' + e.message, true);
@@ -269,7 +298,27 @@ async function refreshResponses() {
   } catch (e) { /* 静默重试 */ }
 }
 
+/* ===== 告警趋势（24h） ===== */
+let trendChart = null;
+
+async function refreshTrend() {
+  try {
+    const t = await jget('/api/v1/alerts/trend');
+    $('trendNote').textContent = `24h 合计 ${t.total} 条`;
+    if (!window.echarts) return;
+    if (!trendChart) trendChart = window.echarts.init($('trend'));
+    trendChart.setOption({
+      grid: { left: 40, right: 16, top: 14, bottom: 36 },
+      tooltip: { trigger: 'axis', backgroundColor: '#101c33', borderColor: 'rgba(122,150,205,.3)', textStyle: { color: '#dce5f7' } },
+      xAxis: { type: 'category', data: t.hours.map((x) => new Date(x.ts).getHours() + '时'), axisLabel: { color: '#7e8fb3' }, axisLine: { lineStyle: { color: '#1e2a44' } } },
+      yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#7e8fb3' }, splitLine: { lineStyle: { color: 'rgba(122,150,205,.12)' } } },
+      series: [{ type: 'bar', barWidth: '55%', itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#4f8cff' }, { offset: 1, color: 'rgba(124,92,255,.35)' }] } }, data: t.hours.map((x) => x.count) }],
+    });
+  } catch (e) { /* 静默重试 */ }
+}
+
 /* ===== 启动 ===== */
+if (!localStorage.getItem('sime_token')) showLogin(true);
 refreshRules().then(() => { if (currentView === 'rules') renderRules(); });
 refreshCatalog();
 refreshHealth();
@@ -278,3 +327,4 @@ refreshTelemetry();
 setInterval(refreshHealth, 3000);
 setInterval(refreshAlerts, 3000);
 setInterval(refreshTelemetry, 2000);
+setInterval(refreshTrend, 30000);

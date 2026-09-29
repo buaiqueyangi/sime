@@ -13,6 +13,8 @@ import { TelemetryService } from './telemetry/telemetry.service';
 import { MqttIngestService } from './ingest/mqtt-ingest.service';
 import { ResponseService } from './response/response.service';
 import { RuleEngineService } from './rule-engine/rule-engine.service';
+import { AuthService } from './auth/auth.service';
+import { AuthController } from './auth/auth.controller';
 
 @Module({
   controllers: [
@@ -24,6 +26,7 @@ import { RuleEngineService } from './rule-engine/rule-engine.service';
     PipelineController,
     TelemetryController,
     ResponsesController,
+    AuthController,
   ],
   providers: [
     AssetRegistryService,
@@ -32,6 +35,7 @@ import { RuleEngineService } from './rule-engine/rule-engine.service';
     ResponseService,
     TelemetryService,
     MqttIngestService,
+    AuthService,
   ],
 })
 export class AppModule {}

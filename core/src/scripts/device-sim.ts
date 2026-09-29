@@ -46,7 +46,10 @@ function tick(): void {
   ticks++;
   const t = Date.now();
   for (const d of DEVICES) {
-    const payload = JSON.stringify({ asset_id: d.id, kind: d.kind, ts: new Date(t).toISOString(), points: d.points(ticks, t) });
+    const points = d.points(ticks, t);
+    // 周期性电压尖峰：超出物模型量程 [0,500]（range_breach），演示遥测越限告警
+    if (d.id === 'dev-meter-001' && ticks % 45 === 0) (points as Record<string, number>).voltage_a = 520;
+    const payload = JSON.stringify({ asset_id: d.id, kind: d.kind, ts: new Date(t).toISOString(), points });
     client.publish(`sime/v1/${d.id}/telemetry`, payload);
     published++;
   }
