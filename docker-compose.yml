@@ -17,6 +17,10 @@ services:
       timeout: 3s
       retries: 20
 
+  emqx:
+    image: emqx/emqx:5.8
+    ports: ["1883:1883", "18083:18083"]
+
   core:
     build:
       context: .
@@ -27,7 +31,8 @@ services:
       SIME_ASSET_ROOT: /app/assets
       SIME_PG_HOST: postgres
       SIME_PG_PASSWORD: ${SIME_PG_PASSWORD:-sime-change-me}
-      SIME_PG_DDL: /app/assets/storage/pg/init/01-schema.sql
+      SIME_PG_DDL_DIR: /app/assets/storage/pg/init
+      SIME_MQTT_URL: mqtt://emqx:1883
       NODE_ENV: production
     ports:
       - "${SIME_HTTP_PORT:-3000}:3000"
@@ -40,16 +45,18 @@ services:
       timeout: 3s
       retries: 12
 
-  # ---- M1 预留（docker compose --profile m1 up -d 启用）----
-  redis:
-    image: redis:7.2-alpine
-    profiles: ["m1"]
-    ports: ["6379:6379"]
-
-  emqx:
-    image: emqx/emqx:5.8
-    profiles: ["m1"]
-    ports: ["1883:1883", "18083:18083"]
+  # ---- 设备模拟器（docker compose --profile sim up -d 启用，页面即有活数据）----
+  sim:
+    build:
+      context: .
+      dockerfile: core/Dockerfile
+    command: node dist/scripts/device-sim.js --loop
+    profiles: ["sim"]
+    environment:
+      SIME_MQTT_URL: mqtt://emqx:1883
+    depends_on:
+      - emqx
+      - core
 
 volumes:
   pgdata:

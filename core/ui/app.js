@@ -91,6 +91,65 @@ async function simulate(reset) {
 $('simulate').onclick = () => simulate(false);
 $('reset').onclick = () => simulate(true);
 
+// ===== 设备遥测（MQTT 接入 → 遥测服务 → 实时曲线）=====
+let chart = null;
+const telSel = { assetId: null, point: null };
+
+async function refreshTelemetry() {
+  try {
+    const latest = await jget('/api/v1/telemetry/latest');
+    const rows = (latest || []).slice(0, 50);
+    $('telLatest').innerHTML = rows.length
+      ? rows.map((x) => `<tr><td class="mono">${esc(x.assetId)}</td><td class="mono">${esc(x.point)}</td><td>${esc(x.value)}</td><td class="dim mono">${esc(new Date(x.ts).toLocaleTimeString())}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty">等待设备接入（sim profile 或 MQTT 发布到 sime/v1/{deviceId}/telemetry）</td></tr>';
+    const pairs = [...new Set((latest || []).map((x) => `${x.assetId}|${x.point}`))];
+    fillSelectors(pairs);
+    if (telSel.assetId && telSel.point) {
+      const s = await jget(`/api/v1/telemetry/series?asset_id=${encodeURIComponent(telSel.assetId)}&point=${encodeURIComponent(telSel.point)}&limit=180`);
+      drawChart(s);
+    }
+  } catch (e) { /* 刷新失败静默，下轮重试 */ }
+}
+
+function fillSelectors(pairs) {
+  if (!pairs.length) return;
+  if (!telSel.assetId || !pairs.includes(`${telSel.assetId}|${telSel.point}`)) {
+    const [a, p] = pairs[0].split('|');
+    telSel.assetId = a;
+    telSel.point = p;
+  }
+  const assets = [...new Set(pairs.map((p) => p.split('|')[0]))];
+  $('telAsset').innerHTML = assets.map((a) => `<option value="${esc(a)}" ${a === telSel.assetId ? 'selected' : ''}>${esc(a)}</option>`).join('');
+  $('telPoint').innerHTML = pairs
+    .filter((p) => p.split('|')[0] === telSel.assetId)
+    .map((p) => p.split('|')[1])
+    .map((p) => `<option value="${esc(p)}" ${p === telSel.point ? 'selected' : ''}>${esc(p)}</option>`)
+    .join('');
+}
+
+$('telAsset').onchange = (e) => { telSel.assetId = e.target.value; telSel.point = null; refreshTelemetry(); };
+$('telPoint').onchange = (e) => { telSel.point = e.target.value; refreshTelemetry(); };
+
+function drawChart(series) {
+  if (!window.echarts || !series.length) return;
+  if (!chart) chart = window.echarts.init($('chart'));
+  chart.setOption({
+    grid: { left: 56, right: 20, top: 16, bottom: 42 },
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'time', axisLabel: { color: '#7c8db0' } },
+    yAxis: { type: 'value', scale: true, axisLabel: { color: '#7c8db0' }, splitLine: { lineStyle: { color: '#1e2a44' } } },
+    series: [{
+      type: 'line', showSymbol: false, smooth: true,
+      lineStyle: { color: '#4f8cff', width: 2 },
+      areaStyle: { color: 'rgba(79,140,255,0.12)' },
+      data: series.map((p) => [p.ts, p.value]),
+    }],
+  });
+}
+
+setInterval(refreshTelemetry, 2000);
+refreshTelemetry();
+
 refreshHealth(); refreshAlerts(); refreshRules(); refreshAdapters(); refreshModels();
 setInterval(refreshHealth, 3000);
 setInterval(refreshAlerts, 3000);

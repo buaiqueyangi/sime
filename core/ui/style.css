@@ -50,4 +50,7 @@ code, .mono { font-family: Consolas, monospace; font-size: 12px; color: #9fc1ff;
 .tag.merged { color: #c792ea; border-color: #5c3a72; }
 .dim { color: var(--dim); }
 
+.chart { height: 260px; margin-bottom: 10px; }
+select { background: #0d1526; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; font-size: 13px; }
+
 footer { text-align: center; color: var(--dim); font-size: 12px; padding: 18px; border-top: 1px solid var(--line); }

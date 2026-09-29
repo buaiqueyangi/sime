@@ -29,6 +29,20 @@
     </section>
 
     <section class="panel">
+      <div class="panel-head">
+        <h2>设备遥测</h2>
+        <select id="telAsset"></select>
+        <select id="telPoint"></select>
+        <span id="telNote" class="note">实时曲线 · 2s 刷新</span>
+      </div>
+      <div id="chart" class="chart"></div>
+      <table>
+        <thead><tr><th>资产</th><th>测点</th><th>最新值</th><th>时间</th></tr></thead>
+        <tbody id="telLatest"><tr><td colspan="4" class="empty">等待设备接入（sim profile 或 MQTT 发布到 sime/v1/{deviceId}/telemetry）</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
       <div class="panel-head"><h2>检测规则库 <span id="ruleCount" class="count"></span></h2></div>
       <table>
         <thead><tr><th>规则 ID</th><th>名称</th><th>域</th><th>类别</th><th>级别</th><th>MITRE ATT&CK</th></tr></thead>
@@ -54,6 +68,7 @@
     </section>
   </main>
   <footer>SIME v0.1.0 · Apache-2.0 · 社区版全功能 · 数据 3s 自动刷新</footer>
+  <script src="/ui/vendor/echarts.min.js"></script>
   <script src="/ui/app.js"></script>
 </body>
 </html>

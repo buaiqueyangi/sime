@@ -12,7 +12,7 @@ COPY storage/ /app/assets/storage
 
 FROM node:20-alpine
 WORKDIR /app
-ENV NODE_ENV=production SIME_ASSET_ROOT=/app/assets SIME_PORT=3000 SIME_PG_DDL=/app/assets/storage/pg/init/01-schema.sql
+ENV NODE_ENV=production SIME_ASSET_ROOT=/app/assets SIME_PORT=3000 SIME_PG_DDL_DIR=/app/assets/storage/pg/init
 COPY --from=build /app/core/node_modules ./node_modules
 COPY --from=build /app/core/dist ./dist
 COPY --from=build /app/assets ./assets
