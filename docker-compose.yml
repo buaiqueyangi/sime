@@ -39,10 +39,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - lakedata:/app/data
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/v1/health"]
+      test: ["CMD-SHELL", "node -e 'fetch(\"http://127.0.0.1:3000/api/v1/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))'"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 12
 
   # ---- 设备模拟器（docker compose --profile sim up -d 启用，页面即有活数据）----
@@ -60,3 +62,4 @@ services:
 
 volumes:
   pgdata:
+  lakedata:

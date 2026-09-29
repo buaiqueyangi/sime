@@ -49,6 +49,8 @@ function tick(): void {
     const points = d.points(ticks, t);
     // 周期性电压尖峰：超出物模型量程 [0,500]（range_breach），演示遥测越限告警
     if (d.id === 'dev-meter-001' && ticks % 45 === 0) (points as Record<string, number>).voltage_a = 520;
+    // 周期性码率异常点：偏离历史基线 >3σ（statistical_anomaly），演示 UEBA
+    if (d.id === 'dev-cam-001' && ticks % 90 === 0) (points as Record<string, number>).bitrate_kbps = 40000;
     const payload = JSON.stringify({ asset_id: d.id, kind: d.kind, ts: new Date(t).toISOString(), points });
     client.publish(`sime/v1/${d.id}/telemetry`, payload);
     published++;

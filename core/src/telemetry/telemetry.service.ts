@@ -74,6 +74,8 @@ export class TelemetryService {
     }
   }
 
+  private welford = new Map<string, { n: number; mean: number; m2: number; lastAnomaly: number }>();
+
   record(points: TelemetryPoint[]): void {
     if (!this.rangeMap.size) this.buildRangeMap();
     const db = this.pg.database;
@@ -104,6 +106,36 @@ export class TelemetryService {
           p.ts,
         );
       }
+
+      // UEBA：Welford 增量基线 + 3σ 统计异常（每测点独立，60s 限频）
+      const w = this.welford.get(key) ?? { n: 0, mean: 0, m2: 0, lastAnomaly: 0 };
+      w.n++;
+      const delta = p.value - w.mean;
+      w.mean += delta / w.n;
+      w.m2 += delta * (p.value - w.mean);
+      if (w.n >= 30 && p.ts - w.lastAnomaly > 60000) {
+        const std = Math.sqrt(w.m2 / (w.n - 1));
+        if (std > 0 && Math.abs(p.value - w.mean) > 3 * std) {
+          w.lastAnomaly = p.ts;
+          this.engine.feed(
+            {
+              event: { category: 'telemetry', name: 'statistical_anomaly', outcome: 'failure' },
+              src: { asset: { id: p.assetId } },
+              sime: { domain: 'ot' },
+              telemetry: {
+                point: p.point,
+                value: p.value,
+                mean: Math.round(w.mean * 100) / 100,
+                std: Math.round(std * 100) / 100,
+                score: Math.round((Math.abs(p.value - w.mean) / std) * 100) / 100,
+              },
+              '@timestamp': new Date(p.ts).toISOString(),
+            },
+            p.ts,
+          );
+        }
+      }
+      this.welford.set(key, w);
     }
     if (db && rows.length) {
       void db

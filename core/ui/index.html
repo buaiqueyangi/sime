@@ -35,6 +35,7 @@
       <a data-view="rules"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z"/></svg>检测规则库</a>
       <a data-view="catalog"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>适配与物模型</a>
       <a data-view="response"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.2 9 19.2 20 8.2l-1.5-1.5z"/></svg>处置闭环</a>
+      <a data-view="lake"><svg viewBox="0 0 24 24" class="strokeic"><path d="M2 7c0-2.8 4.5-5 10-5s10 2.2 10 5-4.5 5-10 5S2 9.8 2 7zm0 5c0 2.8 4.5 5 10 5s10-2.2 10-5M2 17c0 2.8 4.5 5 10 5s10-2.2 10-5"/></svg>数据湖</a>
     </nav>
     <div class="side-foot">
       <a href="/docs" target="_blank">API 文档</a>
@@ -150,6 +151,27 @@
               <tbody id="models"></tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <!-- 数据湖 -->
+      <section id="view-lake" class="view">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>湖仓快照</h2>
+            <button id="lakeSnap" class="btn primary">生成快照（PG 24h → Parquet/zstd）</button>
+            <span id="lakeNote" class="note">DuckDB 内嵌 · 快照覆盖式（最新语义）</span>
+          </div>
+          <table>
+            <thead><tr><th>Parquet 文件</th><th>大小</th></tr></thead>
+            <tbody id="lakeFiles"><tr><td colspan="2" class="empty">尚未生成快照</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>分析查询</h2><span class="note">DuckDB 只读 SQL · 视图 telemetry / alerts · 最多 200 行</span></div>
+          <textarea id="lakeSql" class="sqlbox">SELECT severity, count(*) AS c FROM alerts GROUP BY severity ORDER BY c DESC</textarea>
+          <button id="lakeRun" class="btn primary" style="margin: 8px 0">执行查询</button>
+          <div id="lakeOut"><p class="dim" style="padding: 8px 4px">输入查询后执行</p></div>
         </div>
       </section>
 

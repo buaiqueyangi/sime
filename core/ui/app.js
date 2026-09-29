@@ -56,7 +56,7 @@ function toast(msg, isErr = false) {
 }
 
 /* ===== 视图切换 ===== */
-const TITLES = { overview: '概览', alerts: '实时告警', telemetry: '设备遥测', rules: '检测规则库', catalog: '适配与物模型', response: '处置闭环' };
+const TITLES = { overview: '概览', alerts: '实时告警', telemetry: '设备遥测', rules: '检测规则库', catalog: '适配与物模型', response: '处置闭环', lake: '数据湖' };
 let currentView = 'overview';
 
 function showView(v) {
@@ -66,6 +66,7 @@ function showView(v) {
   $('viewTitle').textContent = TITLES[v] ?? v;
   if (v === 'telemetry') setTimeout(() => { if (chart) chart.resize(); refreshTelemetry(); }, 30);
   if (v === 'response') refreshResponses();
+  if (v === 'lake') refreshLake();
   if (v === 'alerts') refreshAlerts();
 }
 document.querySelectorAll('#nav a').forEach((a) => (a.onclick = () => showView(a.dataset.view)));
@@ -349,6 +350,52 @@ function wsConnect() {
   ws.onerror = () => { try { ws.close(); } catch { /* noop */ } };
 }
 wsConnect();
+
+/* ===== 数据湖（DuckDB + Parquet） ===== */
+async function refreshLake() {
+  if (currentView !== 'lake') return;
+  try {
+    const s = await jget('/api/v1/lake/status');
+    $('lakeFiles').innerHTML = (s.files || []).length
+      ? s.files.map((f) => `<tr><td class="mono">${esc(f.file)}</td><td>${(f.bytes / 1024).toFixed(1)} KB</td></tr>`).join('')
+      : '<tr><td colspan="2" class="empty">尚未生成快照</td></tr>';
+    if (s.lastSnapshot) $('lakeNote').textContent = `上次快照 ${s.lastSnapshot.sid} · ${s.lastSnapshot.tookMs}ms · 存储目录 ${s.lakeDir}`;
+  } catch (e) {
+    $('lakeNote').textContent = e.message;
+  }
+}
+
+$('lakeSnap').onclick = async () => {
+  $('lakeSnap').disabled = true;
+  $('lakeNote').textContent = '快照生成中…';
+  try {
+    const r = await jget('/api/v1/lake/snapshot', { method: 'POST' });
+    toast(`快照完成：${r.files.map((f) => `${f.file} ${f.rows} 行`).join('，')}（${r.tookMs}ms）`);
+  } catch (e) {
+    toast('快照失败: ' + e.message, true);
+  }
+  $('lakeSnap').disabled = false;
+  refreshLake();
+};
+
+$('lakeRun').onclick = async () => {
+  try {
+    const r = await jget('/api/v1/lake/query', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sql: $('lakeSql').value }),
+    });
+    if (!r.rows.length) {
+      $('lakeOut').innerHTML = '<p class="dim" style="padding: 8px 4px">查询成功：0 行</p>';
+      return;
+    }
+    const cols = r.columns;
+    $('lakeOut').innerHTML = `<table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${r.rows
+      .map((row) => `<tr>${cols.map((c) => `<td class="mono">${esc(row[c])}</td>`).join('')}</tr>`)
+      .join('')}</tbody></table>`;
+  } catch (e) {
+    $('lakeOut').innerHTML = `<p class="note" style="color: var(--crit); padding: 8px 4px">${esc(e.message)}</p>`;
+  }
+};
 
 /* ===== 启动 ===== */
 if (!localStorage.getItem('sime_token')) showLogin(true);

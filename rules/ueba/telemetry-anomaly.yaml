@@ -1,0 +1,23 @@
+id: rule.ueba.telemetry-anomaly
+name: 遥测统计异常（3σ 基线偏离）
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ueba
+tactics: ["TA0110 ICS 操纵"]
+techniques: ["T0836 操纵视图"]
+severity: low
+detection:
+  source: event.telemetry
+  window: 1m
+  group_by: ["src.asset.id"]
+  condition: "event.name == 'statistical_anomaly'"
+response:
+  default: ["notify.sec_team"]
+triage: >
+  UEBA 增量基线（Welford）检测到测点偏离历史均值超过 3σ（统计异常，非量程越限）。
+  结合遥测曲线判断：持续偏离可能为工况变化、传感器漂移或数据篡改（操纵视图）；
+  单点毛刺先观察。异常详情见告警 payload 的 mean/std/score。
+references:
+  - https://attack.mitre.org/techniques/T0836/
