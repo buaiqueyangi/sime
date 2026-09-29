@@ -1,0 +1,23 @@
+id: rule.cp.clear-text-protocol
+name: 明文协议登录（telnet/ftp，等保-通信传输）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1040 网络嗅探"]
+severity: medium
+detection:
+  source: event.network.flow
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.outcome == 'success' and network.protocol in ('telnet','ftp')"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+triage: >
+  等保通信传输要求密码等敏感信息加密传输：telnet/ftp 成功登录即违规。
+  通知资产负责人改用 ssh/sftp，并在边界封禁 23/21 端口的对外暴露。
+references:
+  - GB/T 22239-2019 8.1.4.2 通信传输
+  - https://attack.mitre.org/techniques/T1040/

@@ -1,0 +1,24 @@
+id: rule.cp.multi-account-failure
+name: 单源对多账号口令尝试（等保-入侵防范）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1110.003 密码喷洒"]
+severity: high
+detection:
+  source: event.security.auth
+  window: 10m
+  group_by: ["src.ip"]
+  threshold: { distinct_users: 10 }
+  condition: "event.outcome == 'failure' and count_distinct(user.name) >= 10"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create(sla=15m)"]
+triage: >
+  密码喷洒特征（等保入侵防范项）：单源对 10 个以上账号尝试失败。
+  封禁后核对该源是否命中过成功登录，受影响账号强制改密。
+references:
+  - GB/T 22239-2019 8.1.4.3 入侵防范
+  - https://attack.mitre.org/techniques/T1110/003/

@@ -1,0 +1,23 @@
+id: rule.cp.firewall-policy-change
+name: 边界策略变更审计（等保-边界防护）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.004 禁用或修改云防火墙"]
+severity: medium
+detection:
+  source: event.network.flow
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('fw_policy_change','acl_modify')"
+response:
+  default: ["ticket.create", "notify.net_admin"]
+triage: >
+  等保要求边界策略变更可审计、可追溯：逐条核对变更工单与操作人；
+  非计划内变更（尤其是放行类规则）立即回退并审查变更来源。
+references:
+  - GB/T 22239-2019 8.1.3.2 边界防护
+  - https://attack.mitre.org/techniques/T1562/004/

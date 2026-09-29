@@ -218,19 +218,26 @@ export class TelemetryService {
   }
 
   async series(assetId: string, point: string, limit = 240): Promise<{ ts: number; value: number }[]> {
-    const mem = this.seriesMap.get(`${assetId}|${point}`);
-    if (mem && mem.length) return mem.slice(-limit).map((x) => ({ ts: x.ts, value: x.value }));
+    const key = `${assetId}|${point}`;
+    const mem = this.seriesMap.get(key) ?? [];
     const db = this.pg.database;
-    if (!db) return [];
-    const rows = await db
-      .selectFrom('telemetry')
-      .select(['ts', 'value'])
-      .where('asset_id', '=', assetId)
-      .where('point', '=', point)
-      .orderBy('ts', 'desc')
-      .limit(limit)
-      .execute();
-    return rows.map((r) => ({ ts: new Date(r.ts).getTime(), value: r.value })).reverse();
+    let base: { ts: number; value: number }[] = [];
+    if (db) {
+      const rows = await db
+        .selectFrom('telemetry')
+        .select(['ts', 'value'])
+        .where('asset_id', '=', assetId)
+        .where('point', '=', point)
+        .orderBy('ts', 'desc')
+        .limit(limit)
+        .execute();
+      base = rows.map((r) => ({ ts: new Date(r.ts).getTime(), value: r.value })).reverse();
+    }
+    if (!base.length) return mem.slice(-limit);
+    // 内存中比 PG 最新更新的点追加合并（重启后内存只有新增点，不遮蔽历史）
+    const lastTs = base[base.length - 1]!.ts;
+    const merged = [...base, ...mem.filter((p) => p.ts > lastTs)];
+    return merged.slice(-limit);
   }
 
   devices(): { deviceId: string; assetId: string; kind: string; lastSeen: number }[] {

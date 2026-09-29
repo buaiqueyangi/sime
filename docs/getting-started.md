@@ -3,11 +3,10 @@
 ## 方式一：Docker（推荐）
 
 ```bash
-docker compose up -d
-curl http://localhost:3000/api/v1/health
+bash deploy/install.sh          # 或 docker compose --profile sim up -d --build
 ```
 
-预期返回：`{"status":"ok","assets":{"rules":9,"adapters":4,"thing-models":3},"assetErrors":0}`
+打开控制台：`http://<主机IP>:3000/ui`（默认 **admin / sime123456**，`SIME_ADMIN_PASSWORD` 可覆盖）。
 
 ## 方式二：本地运行 core（无需 Docker）
 
@@ -15,55 +14,60 @@ curl http://localhost:3000/api/v1/health
 cd core
 npm install
 npm run build
-npm start          # 监听 :3000
+npm start        # 控制台 /ui · 文档 /docs · API /api/v1
 ```
 
-## 生成演示数据
+## 生成演示数据并回放
 
 ```bash
-python demo/generate.py --smoke              # CI 冒烟：20 设备 × 1 天
-python demo/generate.py                      # 完整：500 设备 × 7 天 + 攻击场景
+python3 demo/generate.py                 # 模拟园区 500 设备 × 7 天 + 攻击场景
+cd core && npm run replay -- ../demo/out/security-events.jsonl
 ```
 
-输出 `demo/out/`：`devices.jsonl`（台账）、`telemetry.jsonl`（遥测）、
-`security-events.jsonl`（攻击回放：暴力破解 / 高频扫描 / WebShell / OT 越权写指令）。
+或启用常驻设备模拟器（EMQX + 周期攻击突发，页面即有活数据）：
+
+```bash
+docker compose --profile sim up -d
+```
 
 ## 声明式资产（贡献入口）
 
 | 资产 | 目录 | Schema |
 |---|---|---|
-| 检测规则（六要素） | `rules/**/*.yaml` | `rules/schema/rule.schema.json` |
+| 检测规则（六要素 + ATT&CK） | `rules/**/*.yaml` | `rules/schema/rule.schema.json` |
 | 日志源适配器（三层） | `adapters/*.yaml` | `adapters/schema/adapter.schema.json` |
 | 物模型模板 | `templates/thing-model/*.yaml` | `templates/thing-model/schema.json` |
-
-校验：
-
-```bash
-cd core && npm run validate
-```
-
-提交新规则/适配器/模板 = 提交 PR，CI 会强制 Schema 校验与冒烟测试。
-
-## 生成演示数据并回放
+| SOAR 剧本 | `templates/playbooks/*.yaml` | `templates/playbooks/schema.json` |
 
 ```bash
-python demo/generate.py                 # 生成 demo/out/（500 设备 × 7 天 + 5 类攻击场景）
-cd core && npm run replay -- ../demo/out/security-events.jsonl
+cd core && npm run validate      # Schema 全量校验 + 适配器样例回归
 ```
 
-回放输出即"5 分钟出告警"验收：55 条攻击事件 → 6 条告警（暴力破解横向移动 / 高频扫描 /
-WebShell / OT 越权写指令 / 白名单外控制源 / 感染后暴力破解跨源链）。
+## 命令速查（core/）
 
-## API 一览（M0/M0.5）
+| 命令 | 说明 |
+|---|---|
+| `npm test` | 冒烟：资产校验 + 适配器回归 + 引擎回放 + 性能地板 |
+| `npm run bench` | 机制基准（规则引擎 EPS / 适配器 maps/s） |
+| `npm run e2e` | 端到端回归（对运行中平台，29 项检查） |
+| `npm run replay -- <events.jsonl>` | 事件回放出告警 |
+| `npm run sim -- --loop` | 设备模拟器（遥测 + 周期攻击突发） |
+
+## API 一览
 
 | 端点 | 说明 |
 |---|---|
-| `GET /api/v1/health` | 健康与资产加载统计 + 规则引擎状态 |
-| `GET /api/v1/rules` / `GET /api/v1/rules/stats` | 规则清单与按域/类别/级别统计 |
-| `GET /api/v1/adapters` | 适配器清单（厂商/协议/威胁字典数） |
-| `GET /api/v1/thing-models` | 物模型模板清单 |
-| `GET /api/v1/alerts` | 告警（内存态；设 `SIME_PG_HOST` 后持久化到 PG） |
-| `GET /docs` | Swagger 契约文档（代码即契约） |
+| `GET /api/v1/health` | 健康（免认证） |
+| `POST /api/v1/auth/login` | 登录取 token（默认 admin/sime123456） |
+| `GET /api/v1/rules` `GET /api/v1/rules/stats` | 规则清单与统计 |
+| `GET /api/v1/adapters` `GET /api/v1/thing-models` | 适配器 / 物模型 |
+| `GET /api/v1/alerts` `POST /api/v1/alerts/{id}/ack` `.../resolve` | 告警与闭环 |
+| `GET /api/v1/alerts/trend` | 24h 趋势 |
+| `POST /api/v1/pipeline/simulate` | 一键攻击回放 |
+| `GET /api/v1/telemetry/latest` `/series` `/devices` | 遥测查询 |
+| `GET/POST /api/v1/topology/layout` | 组态布局 |
+| `GET /api/v1/playbooks` `GET /api/v1/responses` | 剧本 / 处置闭环 |
+| `GET /api/v1/lake/status` `POST /api/v1/lake/snapshot` `POST /api/v1/lake/query` | 数据湖 |
+| `GET /docs` | Swagger |
 
-组件升级说明：本轮已评估并升级 @nestjs 12 / @nestjs/swagger 12 / js-yaml 5 / kysely 0.29
-（构建+冒烟全绿）；TypeScript 7（原生编译器）与 @types/node 大版本暂不跟进，理由见蓝图 §4。
+除 `/health` 与 `/auth/login` 外均需 `Authorization: Bearer <token>`。

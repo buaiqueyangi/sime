@@ -1,0 +1,24 @@
+id: rule.cp.usb-storage-added
+name: USB 存储设备接入（等保-边界防护）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0001 初始访问"]
+techniques: ["T1091 非常规介质复制"]
+severity: medium
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('usb_storage_add','removable_media_mount')"
+  except: "dst.asset.labels.role in ('kiosk','backup-worker')"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+triage: >
+  等保边界防护项：USB 存储接入需登记审批。核实是否为运维拷贝；
+  生产网与工控网主机建议策略性禁用（HIDS 下发），违规接入按制度处置。
+references:
+  - GB/T 22239-2019 8.1.3.2 边界防护
+  - https://attack.mitre.org/techniques/T1091/

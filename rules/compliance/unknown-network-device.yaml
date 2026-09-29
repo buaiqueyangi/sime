@@ -1,0 +1,23 @@
+id: rule.cp.unknown-network-device
+name: 未知设备接入网络（等保-边界防护）
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: compliance
+tactics: ["TA0001 初始访问"]
+techniques: ["T1200 硬件植入"]
+severity: medium
+detection:
+  source: event.network.flow
+  window: 5m
+  group_by: ["src.ip"]
+  condition: "src.asset_id == null and count() >= 5 and network.direction == 'inbound'"
+response:
+  default: ["ticket.create", "notify.net_admin"]
+triage: >
+  等保边界防护项：无台账资产出现在网络中（新 mac/ip 未登记）。先测绘确认设备类型；
+  计划内设备补录台账，未知设备按制度隔离排查（重点核查工控网段）。
+references:
+  - GB/T 22239-2019 8.1.3.2 边界防护
+  - https://attack.mitre.org/techniques/T1200/

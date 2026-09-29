@@ -1,0 +1,23 @@
+id: rule.cp.login-outside-hours
+name: 非授权时段系统登录（等保-身份鉴别）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0001 初始访问"]
+techniques: ["T1078 有效账户"]
+severity: medium
+detection:
+  source: event.security.auth
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.outcome == 'success' and not time.in_shift(dst.asset.labels.shift)"
+  except: "user.name matches '(?i)^(ansible|deploy|backup)$'"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+triage: >
+  等保身份鉴别要求：非运维时段的成功登录需逐条核实（值班表比对）。
+  服务类账号（ansible/deploy）白名单放行；人账号在非时段登录先电话确认本人。
+references:
+  - GB/T 22239-2019 8.1.4.1 身份鉴别

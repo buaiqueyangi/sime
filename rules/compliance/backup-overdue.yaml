@@ -1,0 +1,22 @@
+id: rule.cp.backup-overdue
+name: 备份超期未执行（等保-数据备份恢复）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0040 影响"]
+techniques: ["T1485 数据销毁"]
+severity: medium
+detection:
+  source: event.telemetry
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name == 'backup_overdue'"
+response:
+  default: ["ticket.create(sla=4h)", "notify.backup_admin"]
+triage: >
+  等保数据备份恢复项：备份任务超期由调度探针产生（backup_overdue）。
+  核实备份系统状态与存储空间；连续超期升级为高危并评估恢复演练必要性。
+references:
+  - GB/T 22239-2019 8.1.4.8 数据备份恢复

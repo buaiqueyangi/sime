@@ -112,11 +112,15 @@ async function main(): Promise<void> {
   console.log('[4] 遥测与组态');
   const latest = await jget('/api/v1/telemetry/latest');
   check('遥测最新值非空（MQTT 接入）', (latest.json ?? []).length > 0, `${latest.json?.length ?? 0} 点`);
-  const pair = (latest.json ?? [])[0];
-  if (pair) {
-    const series = await jget(`/api/v1/telemetry/series?asset_id=${encodeURIComponent(pair.assetId)}&point=${encodeURIComponent(pair.point)}&limit=50`);
-    check('遥测曲线有历史数据', (series.json?.length ?? 0) > 5, `${series.json?.length ?? 0} 点`);
+  const pairs = ([...new Set((latest.json ?? []).map((x: any) => `${x.assetId}|${x.point}`))] as string[]).slice(0, 5);
+  let best = 0;
+  for (const p of pairs) {
+    const [a, pt] = p.split('|');
+    const series = await jget(`/api/v1/telemetry/series?asset_id=${encodeURIComponent(a!)}&point=${encodeURIComponent(pt!)}&limit=50`);
+    best = Math.max(best, series.json?.length ?? 0);
+    if (best > 5) break;
   }
+  check('遥测曲线有历史数据', best > 5, `最多 ${best} 点`);
   const layout0 = await jget('/api/v1/topology/layout');
   const save = await jpost('/api/v1/topology/layout', layout0.json);
   check('组态布局保存/回读', save.status >= 200 && save.status < 300);

@@ -1,0 +1,23 @@
+id: rule.cp.privileged-command
+name: 提权命令使用审计（等保-访问控制）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0004 权限提升"]
+techniques: ["T1548.003 Sudo 和 Sudo Caching"]
+severity: low
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["src.asset_id"]
+  condition: "event.name in ('sudo_use','su_use')"
+response:
+  default: ["notify.sec_team"]
+triage: >
+  等保访问控制项：sudo/su 使用逐条留痕并知会安全团队（低危，仅审计视角）。
+  结合工单与变更窗口核对；高频出现时检查是否脚本未缓存凭据。
+references:
+  - GB/T 22239-2019 8.1.4.2 访问控制
+  - https://attack.mitre.org/techniques/T1548/003/

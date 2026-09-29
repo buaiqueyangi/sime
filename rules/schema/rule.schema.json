@@ -64,7 +64,7 @@
       }
     },
     "triage": { "type": "string", "minLength": 20, "description": "研判说明/示例，值班人员第一眼看到的内容" },
-    "references": { "type": "array", "items": { "type": "string", "pattern": "^https?://" } }
+    "references": { "type": "array", "items": { "type": "string", "minLength": 4 }, "description": "ATT&CK 链接或标准条文引用（如 GB/T 22239-2019 条款）" }
   },
   "definitions": {
     "action": {

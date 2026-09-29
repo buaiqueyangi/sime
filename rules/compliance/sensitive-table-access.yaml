@@ -1,0 +1,24 @@
+id: rule.cp.sensitive-table-access
+name: 敏感数据表访问审计（等保-数据安全）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0010 数据渗出"]
+techniques: ["T1213 从信息仓库收集数据"]
+severity: medium
+detection:
+  source: event.db.audit
+  window: 10m
+  group_by: ["user.name"]
+  threshold: { sensitive_reads: 20 }
+  condition: "event.category == 'database' and db.table matches '(?i)(user|customer|payment|salary)' and count() >= 20"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+triage: >
+  等保数据安全项：敏感表批量读取需核对业务场景（导出/报表/同步）；
+  非业务场景的批量访问确认操作人身份与终端，评估数据泄露风险。
+references:
+  - GB/T 22239-2019 8.1.4.9 数据完整性
+  - https://attack.mitre.org/techniques/T1213/
