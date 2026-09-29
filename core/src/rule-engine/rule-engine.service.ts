@@ -81,6 +81,7 @@ export class RuleEngineService implements OnModuleInit {
   private async persist(a: SimeAlert): Promise<void> {
     try {
       const id = await this.pg.insertAlert(a);
+      if (id) a.pgId = id;
       await this.response.execute(a, id);
       for (const fn of this.alertListeners) {
         try {

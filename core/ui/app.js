@@ -56,7 +56,7 @@ function toast(msg, isErr = false) {
 }
 
 /* ===== 视图切换 ===== */
-const TITLES = { overview: '概览', alerts: '实时告警', telemetry: '设备遥测', rules: '检测规则库', catalog: '适配与物模型', response: '处置闭环', lake: '数据湖' };
+const TITLES = { overview: '概览', alerts: '实时告警', telemetry: '设备遥测', topology: '组态总览', rules: '检测规则库', catalog: '适配与物模型', response: '处置闭环', lake: '数据湖' };
 let currentView = 'overview';
 
 function showView(v) {
@@ -67,6 +67,7 @@ function showView(v) {
   if (v === 'telemetry') setTimeout(() => { if (chart) chart.resize(); refreshTelemetry(); }, 30);
   if (v === 'response') refreshResponses();
   if (v === 'lake') refreshLake();
+  if (v === 'topology') refreshTopology();
   if (v === 'alerts') refreshAlerts();
 }
 document.querySelectorAll('#nav a').forEach((a) => (a.onclick = () => showView(a.dataset.view)));
@@ -138,7 +139,7 @@ async function refreshAlerts() {
     const a = await jget('/api/v1/alerts');
     const items = a.items || [];
     const filtered = sevFilter === 'all' ? items : items.filter((x) => x.severity === sevFilter);
-    $('alertNote').textContent = `累计 ${fmtN(a.stats.alerts)} · 当前显示 ${filtered.length}`;
+    $('alertNote').textContent = `累计 ${fmtN(a.stats.alerts)} · 当前显示 ${filtered.length}${a.pgActive ? ' · PG 持久化（可闭环操作）' : ' · 内存态'}`;
     $('alerts').innerHTML = filtered.length
       ? filtered.map((x) => `<tr>
           <td class="mono" title="${esc(x.ts)}">${hhmmss(Date.parse(x.ts))}</td>
@@ -146,15 +147,29 @@ async function refreshAlerts() {
           <td><span class="tag ${esc(x.domain)}">${esc(x.domain)}</span></td>
           <td>${esc(x.ruleName)}<div class="dim mono">${esc(x.ruleId)}</div></td>
           <td class="mono">${esc(x.groupKey)}</td>
-          <td class="dim mono">${esc((x.actions || []).join(' '))}</td>
+          <td><span class="tag ${x.state === 'resolved' ? 'low' : x.state === 'ack' ? 'info' : 'high'}">${esc(x.state || 'open')}</span></td>
+          <td>${x.pgId ? `<button class="mini" data-act="ack" data-id="${x.pgId}">确认</button><button class="mini resolve" data-act="resolve" data-id="${x.pgId}">解决</button>` : '<span class="dim">-</span>'}</td>
           <td>${esc(x.summary)}</td></tr>`).join('')
-      : '<tr><td colspan="7" class="empty">该级别暂无告警</td></tr>';
+      : '<tr><td colspan="8" class="empty">该级别暂无告警</td></tr>';
+    document.querySelectorAll('#alerts [data-act]').forEach((b) => {
+      b.onclick = () => alertAction(b.dataset.act, b.dataset.id);
+    });
     if (items.length !== lastAlertCount) {
       lastAlertCount = items.length;
       if (currentView !== 'alerts' && items.length) $('navAlertDot').classList.remove('hidden');
     }
     if (currentView === 'overview') refreshOverviewAlerts();
   } catch (e) { /* 静默重试 */ }
+}
+
+async function alertAction(act, pgId) {
+  try {
+    await jget(`/api/v1/alerts/${pgId}/${act}`, { method: 'POST' });
+    toast(`告警 #${pgId} 已${act === 'ack' ? '确认' : '解决'}`);
+    refreshAlerts();
+  } catch (e) {
+    toast('操作失败: ' + e.message, true);
+  }
 }
 
 document.querySelectorAll('#sevChips .chip').forEach((c) => {
@@ -343,6 +358,8 @@ function wsConnect() {
         toast(`[${m.alert.severity}] ${m.alert.ruleName}`, m.alert.severity === 'critical');
         lastAlertCount = -1;
         refreshAlerts(); refreshHealth();
+      } else if (m.type === 'alert-state') {
+        refreshAlerts();
       }
     } catch { /* 忽略坏帧 */ }
   };
@@ -350,6 +367,37 @@ function wsConnect() {
   ws.onerror = () => { try { ws.close(); } catch { /* noop */ } };
 }
 wsConnect();
+
+/* ===== 组态总览（设备瓦片自动生成，v0 运行时；拖拽编辑器 v1） ===== */
+async function refreshTopology() {
+  if (currentView !== 'topology') return;
+  try {
+    const [latest, devices] = await Promise.all([jget('/api/v1/telemetry/latest'), jget('/api/v1/telemetry/devices')]);
+    const byAsset = new Map();
+    for (const x of latest || []) {
+      if (!byAsset.has(x.assetId)) byAsset.set(x.assetId, []);
+      byAsset.get(x.assetId).push(x);
+    }
+    const devInfo = new Map((devices || []).map((d) => [d.assetId, d]));
+    const tiles = [...byAsset.entries()];
+    $('topoGrid').innerHTML = tiles.length
+      ? tiles.map(([assetId, pts]) => {
+          const kind = devInfo.get(assetId)?.kind ?? 'device';
+          const vals = pts.slice(0, 3).map((p) => `<div class="t-val"><span>${esc(p.point)}</span><b>${fmtN(Math.round(p.value * 100) / 100)}</b></div>`).join('');
+          return `<div class="topo-tile" data-asset="${esc(assetId)}" data-point="${esc(pts[0].point)}">
+            <div class="t-name">${esc(assetId)}</div><div class="t-kind">${esc(kind)}</div>${vals}
+          </div>`;
+        }).join('')
+      : '<p class="dim" style="padding: 8px 4px">等待设备接入 —— 启用 compose sim profile 或向 EMQX 发布遥测</p>';
+    document.querySelectorAll('.topo-tile').forEach((t) => {
+      t.onclick = () => {
+        telSel.assetId = t.dataset.asset;
+        telSel.point = t.dataset.point;
+        showView('telemetry');
+      };
+    });
+  } catch (e) { /* 静默重试 */ }
+}
 
 /* ===== 数据湖（DuckDB + Parquet） ===== */
 async function refreshLake() {
@@ -407,4 +455,5 @@ refreshTelemetry();
 setInterval(refreshHealth, 3000);
 setInterval(refreshAlerts, 3000);
 setInterval(refreshTelemetry, 2000);
+setInterval(refreshTopology, 2000);
 setInterval(refreshTrend, 30000);

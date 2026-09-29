@@ -54,6 +54,19 @@ export class WsService {
     }
   }
 
+  broadcastAlertState(pgId: number, state: string): void {
+    const msg = JSON.stringify({ type: 'alert-state', pgId, state });
+    for (const c of this.clients) {
+      if (c.readyState === WebSocket.OPEN) {
+        try {
+          c.send(msg);
+        } catch {
+          this.clients.delete(c);
+        }
+      }
+    }
+  }
+
   clientCount(): number {
     return this.clients.size;
   }

@@ -32,6 +32,7 @@
       </a>
       <a data-view="alerts"><svg viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 0-6 6v4l-2 4h16l-2-4V8a6 6 0 0 0-6-6zm-2 16a2 2 0 0 0 4 0z"/></svg>实时告警<span id="navAlertDot" class="nav-dot hidden"></span></a>
       <a data-view="telemetry"><svg viewBox="0 0 24 24"><path d="M4 20V10m5 10V4m5 16v-7m5 7V8" stroke-width="2.4" stroke-linecap="round" fill="none" class="stroke"/></svg>设备遥测</a>
+      <a data-view="topology"><svg viewBox="0 0 24 24"><path d="M3 3h6v6H3zM15 3h6v6h-6zM9 15h6v6H9zM6 9v3h12V9M12 9v6" stroke-width="1.8" fill="none" class="stroke"/></svg>组态总览</a>
       <a data-view="rules"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z"/></svg>检测规则库</a>
       <a data-view="catalog"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>适配与物模型</a>
       <a data-view="response"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.2 9 19.2 20 8.2l-1.5-1.5z"/></svg>处置闭环</a>
@@ -89,9 +90,17 @@
             <span class="note" id="alertNote"></span>
           </div>
           <table>
-            <thead><tr><th>时间</th><th>级别</th><th>域</th><th>规则</th><th>分组</th><th>处置动作</th><th>研判摘要</th></tr></thead>
+            <thead><tr><th>时间</th><th>级别</th><th>域</th><th>规则</th><th>分组</th><th>状态</th><th>操作</th><th>研判摘要</th></tr></thead>
             <tbody id="alerts"></tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- 组态总览 -->
+      <section id="view-topology" class="view">
+        <div class="panel">
+          <div class="panel-head"><h2>园区设备总览</h2><span class="note">由设备台账自动生成 · 点击设备跳转实时曲线 · 2s 刷新</span></div>
+          <div id="topoGrid" class="topo-grid"></div>
         </div>
       </section>
 

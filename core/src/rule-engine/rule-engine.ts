@@ -26,10 +26,12 @@ export interface SimeRule {
 
 export interface SimeAlert {
   id: string;
+  pgId?: number; // 持久化后的 PG 主键（闭环操作用）
   ruleId: string;
   ruleName: string;
   severity: string;
   domain: string;
+  state?: string;
   ts: string;
   groupKey: string;
   hits: number;

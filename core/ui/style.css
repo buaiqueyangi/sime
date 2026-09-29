@@ -122,6 +122,19 @@ select { background: #0d1526; color: var(--text); border: 1px solid var(--line);
 .login-card input { width: 100%; margin: 6px 0; padding: 9px 12px; background: #0d1526; color: var(--text); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
 .login-card .brand-mark { width: 40px; height: 40px; font-size: 20px; }
 
+.topo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.topo-tile { position: relative; background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 10px; padding: 12px; cursor: pointer; transition: border-color .15s, transform .1s; }
+.topo-tile:hover { border-color: var(--accent); transform: translateY(-2px); }
+.topo-tile.alarm { border-color: var(--crit); box-shadow: 0 0 12px rgba(255, 77, 106, .25); }
+.topo-tile .t-name { font-weight: 600; font-size: 13px; }
+.topo-tile .t-kind { font-size: 11px; color: var(--dim); margin-bottom: 6px; }
+.topo-tile .t-val { font-size: 12px; display: flex; justify-content: space-between; gap: 8px; }
+.topo-tile .t-val b { color: #9fc1ff; font-weight: 500; }
+.mini { background: transparent; border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; padding: 2px 8px; font-size: 11px; cursor: pointer; margin-right: 4px; }
+.mini:hover { background: rgba(79, 140, 255, .15); }
+.mini.resolve { border-color: var(--ok); color: var(--ok); }
+.mini.resolve:hover { background: rgba(52, 211, 153, .12); }
+
 #toasts { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
 .toast { background: var(--panel-2); border: 1px solid rgba(79, 140, 255, .45); border-left: 3px solid var(--accent); color: var(--text); border-radius: 10px; padding: 10px 16px; font-size: 13px; box-shadow: 0 8px 30px rgba(0, 0, 0, .45); animation: slidein .2s ease; max-width: 380px; }
 .toast.err { border-color: rgba(255, 77, 106, .5); border-left-color: var(--crit); }
