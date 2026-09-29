@@ -8,13 +8,17 @@
 口径：确定性事件预生成（50% 认证失败 / 30% 网络连接 / 15% Web / 5% 工控指令），
 计时仅含 feed/求值热路径，单进程 Node 22，10 条规则全量编译加载。
 
-| 场景 | 吞吐 | 说明 |
-|---|---|---|
-| S1 规则引擎 feed（10 规则、滑动窗口聚合） | **~224,000 events/s**（开发机 Windows 实测） | 含 20% 高频认证事件的桶更新、去重计数、序列状态机 |
-| S2 适配器解析+映射（kv 模板） | **~234,000 events/s** | compile-once，事件路径零模板解析 |
+| 环境 | S1 规则引擎 feed | S2 适配器解析+映射 | 备注 |
+|---|---|---|---|
+| **Linux 实测（Debian 12, 4C/7.7G, Docker 容器）** | **192,226 events/s** | **202,400 events/s** | 2026-09 实测，生产部署形态 |
+| Windows 开发机实测 | ~224,000 events/s | ~234,000 events/s | 参考值 |
+
+**实测部署记录（2026-09）**：Debian 12 / 4C / 7.7GiB / Docker 29.8，`docker compose up -d --build`
+一体化部署（core + PostgreSQL），容器常驻内存 **38.67 MiB**（core）+ 19.45 MiB（PG），空载 load 0.06；
+同机 55 条攻击事件回放命中 6 条规则、告警落 PostgreSQL（pgProfile: active）。
 
 复现：`cd core && npm run bench`（`--quick` 减量）。CI 中 `npm test` 内置 5,000 EPS 性能地板，
-低于地板即失败——**性能回归按正确性同等对待**。Linux 服务器数字以发布报告为准（sime-bench 完整版随 M3 发布）。
+低于地板即失败——**性能回归按正确性同等对待**。sime-bench 完整版随 M3 发布。
 
 ## 2. 机制优化清单（v2 内核，"优化到机制"的落地）
 
