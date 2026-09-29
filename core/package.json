@@ -11,7 +11,8 @@
     "test": "node dist/scripts/smoke.js",
     "bench": "node dist/scripts/bench.js",
     "replay": "node dist/scripts/replay.js",
-    "sim": "node dist/scripts/device-sim.js"
+    "sim": "node dist/scripts/device-sim.js",
+    "e2e": "node dist/scripts/e2e.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.0",

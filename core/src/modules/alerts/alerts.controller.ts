@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { HttpCode,Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { sql } from 'kysely';
 import { PgProfileService } from '../../common/pg-profile.service';
@@ -95,12 +95,14 @@ export class AlertsController {
   }
 
   /** 告警确认（ack）：值班人员已知晓并开始处理。 */
+  @HttpCode(200)
   @Post(':id/ack')
   async ack(@Param('id') id: string) {
     return this.setState(Number(id), 'ack');
   }
 
   /** 告警解决（resolve）：处置完成闭环。 */
+  @HttpCode(200)
   @Post(':id/resolve')
   async resolve(@Param('id') id: string) {
     return this.setState(Number(id), 'resolved');

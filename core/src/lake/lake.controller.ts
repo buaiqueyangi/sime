@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
+import { HttpCode,BadRequestException, Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { LakeService } from './lake.service';
 
@@ -13,12 +13,14 @@ export class LakeController {
   }
 
   /** 快照：PG 最近 24h 遥测/告警 → Parquet（zstd） */
+  @HttpCode(200)
   @Post('snapshot')
   snapshot() {
     return this.lake.snapshot();
   }
 
   /** 受限只读分析查询（DuckDB over Parquet，视图 telemetry / alerts） */
+  @HttpCode(200)
   @Post('query')
   async query(@Body() body: { sql?: string }) {
     try {

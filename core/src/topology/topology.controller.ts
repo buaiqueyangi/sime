@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { HttpCode,Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { TopologyLayout, TopologyService } from './topology.service';
 
@@ -11,6 +11,8 @@ export class TopologyController {
   layout() {
     return this.topo.getLayout();
   }
+
+  @HttpCode(200)
 
   @Post('layout')
   save(@Body() layout: TopologyLayout) {
