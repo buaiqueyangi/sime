@@ -1,0 +1,9 @@
+id: pb.log4j.component-scan
+name: Log4j 组件排查扫描
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.web.log4j-exploit
+steps:
+  - asset.scan(dst.asset_id, profile=log4j)

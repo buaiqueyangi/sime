@@ -1,0 +1,10 @@
+id: pb.plc-write.halt
+name: PLC 越权写指令紧急停控
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.ot.plc-write-offhours
+steps:
+  - plc.halt(dst.asset.id)
+  - notify.ot_duty

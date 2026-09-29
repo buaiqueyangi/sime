@@ -1,0 +1,10 @@
+id: pb.bruteforce.auto-contain
+name: 暴力破解自动封禁
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.host.bruteforce.multi-target
+steps:
+  - firewall.block(src.ip, ttl=24h)
+  - account.lock(user.name, ttl=1h)

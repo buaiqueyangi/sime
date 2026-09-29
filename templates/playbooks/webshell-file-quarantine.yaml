@@ -1,0 +1,10 @@
+id: pb.webshell.file-quarantine
+name: WebShell 文件隔离
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.host.webshell.upload
+steps:
+  - file.quarantine(file.name)
+  - notify.owner(dst.asset_id)

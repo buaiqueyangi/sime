@@ -1,0 +1,10 @@
+id: pb.reverse-shell.host-isolate
+name: 反弹 Shell 主机隔离
+version: "1.0"
+status: stable
+trigger:
+  rules:
+    - rule.host.reverse-shell.dmz
+steps:
+  - isolate.host(dst.asset.id)
+  - notify.owner(dst.asset.id)

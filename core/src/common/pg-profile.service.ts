@@ -79,6 +79,14 @@ interface RulesRow {
   definition: unknown;
   status: string;
 }
+interface PlaybookRunsRow {
+  id: Generated<number>;
+  playbook_id: string;
+  alert_id: number | null;
+  rule_id: string;
+  actions: string[];
+  ts: Generated<Date>;
+}
 
 export interface DB {
   alerts: AlertsRow;
@@ -90,6 +98,7 @@ export interface DB {
   assets: AssetsRow;
   devices: DevicesRow;
   rules: RulesRow;
+  playbook_runs: PlaybookRunsRow;
 }
 
 @Injectable()

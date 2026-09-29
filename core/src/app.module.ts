@@ -15,6 +15,9 @@ import { ResponseService } from './response/response.service';
 import { RuleEngineService } from './rule-engine/rule-engine.service';
 import { AuthService } from './auth/auth.service';
 import { AuthController } from './auth/auth.controller';
+import { PlaybooksController } from './modules/playbooks/playbooks.controller';
+import { PlaybookService } from './soar/playbook.service';
+import { WsService } from './ws/ws.service';
 
 @Module({
   controllers: [
@@ -27,6 +30,7 @@ import { AuthController } from './auth/auth.controller';
     TelemetryController,
     ResponsesController,
     AuthController,
+    PlaybooksController,
   ],
   providers: [
     AssetRegistryService,
@@ -36,6 +40,8 @@ import { AuthController } from './auth/auth.controller';
     TelemetryService,
     MqttIngestService,
     AuthService,
+    PlaybookService,
+    WsService,
   ],
 })
 export class AppModule {}

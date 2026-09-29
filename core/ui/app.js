@@ -39,6 +39,7 @@ $('loginBtn').onclick = async () => {
     showLogin(false);
     lastAlertCount = -1;
     toast(`欢迎回来，${j.user}`);
+    wsConnect();
     refreshHealth(); refreshAlerts(); refreshRules(); refreshCatalog(); refreshTelemetry();
   } catch (e) {
     $('loginErr').textContent = e.message;
@@ -285,7 +286,14 @@ async function refreshCatalog() {
 /* ===== 处置闭环 ===== */
 async function refreshResponses() {
   try {
-    const r = await jget('/api/v1/responses');
+    const [r, pb] = await Promise.all([jget('/api/v1/responses'), jget('/api/v1/playbooks')]);
+    $('playbooks').innerHTML = (pb.playbooks || []).length
+      ? pb.playbooks.map((p) => `<tr>
+          <td>${esc(p.name)}<div class="dim mono">${esc(p.id)}</div></td>
+          <td class="mono">${esc(p.rules.join('<br>'))}</td>
+          <td class="dim mono">${esc(p.steps.join(' → '))}</td>
+          <td>${p.runs}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="empty">无剧本</td></tr>';
     $('rTickets').innerHTML = (r.tickets || []).length
       ? r.tickets.map((t) => `<tr><td>${esc(t.title)}</td><td><span class="tag ${t.state === 'open' ? 'medium' : 'low'}">${esc(t.state)}</span></td><td class="dim">${rel(t.ts)}</td></tr>`).join('')
       : '<tr><td class="empty">暂无工单</td></tr>';
@@ -316,6 +324,31 @@ async function refreshTrend() {
     });
   } catch (e) { /* 静默重试 */ }
 }
+
+/* ===== WebSocket 实时推送（轮询兜底） ===== */
+let ws = null;
+function wsConnect() {
+  const t = localStorage.getItem('sime_token');
+  if (!t || (ws && ws.readyState <= 1)) { setTimeout(wsConnect, 3000); return; }
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  try {
+    ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(t)}`);
+  } catch { setTimeout(wsConnect, 3000); return; }
+  ws.onopen = () => { $('wsState').textContent = 'WebSocket 已连接 · 告警毫秒级推送'; };
+  ws.onmessage = (ev) => {
+    try {
+      const m = JSON.parse(ev.data);
+      if (m.type === 'alert') {
+        toast(`[${m.alert.severity}] ${m.alert.ruleName}`, m.alert.severity === 'critical');
+        lastAlertCount = -1;
+        refreshAlerts(); refreshHealth();
+      }
+    } catch { /* 忽略坏帧 */ }
+  };
+  ws.onclose = () => { $('wsState').textContent = 'WebSocket 断开（轮询兜底中）'; setTimeout(wsConnect, 3000); };
+  ws.onerror = () => { try { ws.close(); } catch { /* noop */ } };
+}
+wsConnect();
 
 /* ===== 启动 ===== */
 if (!localStorage.getItem('sime_token')) showLogin(true);

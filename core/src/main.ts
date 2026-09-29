@@ -7,6 +7,7 @@ import type { NextFunction, Request, Response } from 'express';
 import * as path from 'path';
 import { AppModule } from './app.module';
 import { AuthService } from './auth/auth.service';
+import { WsService } from './ws/ws.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -49,7 +50,8 @@ async function bootstrap() {
 
   const port = Number(process.env.SIME_PORT ?? 3000);
   await app.listen(port, '0.0.0.0');
-  console.log(`[sime-core] listening on :${port} (console /ui, docs /docs, prefix /api/v1 · auth on)`);
+  app.get(WsService).attach(app.getHttpServer()); // WebSocket 实时推送 /ws?token=
+  console.log(`[sime-core] listening on :${port} (console /ui, docs /docs, prefix /api/v1 · auth on · ws on)`);
 }
 
 void bootstrap();

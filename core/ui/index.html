@@ -155,6 +155,13 @@
 
       <!-- 处置闭环 -->
       <section id="view-response" class="view">
+        <div class="panel">
+          <div class="panel-head"><h2>SOAR 剧本</h2><span id="wsState" class="note"></span></div>
+          <table>
+            <thead><tr><th>剧本</th><th>触发规则</th><th>追加处置动作</th><th>执行次数</th></tr></thead>
+            <tbody id="playbooks"><tr><td colspan="4" class="empty">加载中…</td></tr></tbody>
+          </table>
+        </div>
         <div class="cols">
           <div class="panel">
             <div class="panel-head"><h2>工单（ticket.create）</h2></div>

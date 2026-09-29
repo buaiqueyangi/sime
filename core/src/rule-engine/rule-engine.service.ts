@@ -82,9 +82,23 @@ export class RuleEngineService implements OnModuleInit {
     try {
       const id = await this.pg.insertAlert(a);
       await this.response.execute(a, id);
+      for (const fn of this.alertListeners) {
+        try {
+          fn(a, id);
+        } catch {
+          /* 监听器异常不影响主链路 */
+        }
+      }
     } catch (e) {
       this.logger.warn(`alert persist failed: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+
+  private alertListeners: ((a: SimeAlert, alertId: number | null) => void)[] = [];
+
+  /** 订阅新告警（WebSocket 广播 / SOAR 剧本触发等）。 */
+  onAlert(fn: (a: SimeAlert, alertId: number | null) => void): void {
+    this.alertListeners.push(fn);
   }
 
   /** 重建引擎（清空窗口/冷却/告警状态），供"重置回放"使用。 */
