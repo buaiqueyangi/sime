@@ -205,6 +205,7 @@ $('reset').onclick = () => simulate(true);
 /* ===== 设备遥测 ===== */
 let chart = null;
 const telSel = { assetId: null, point: null };
+const telSeriesBuf = [];
 
 async function refreshTelemetry() {
   if (currentView !== 'telemetry') return;
@@ -217,6 +218,8 @@ async function refreshTelemetry() {
     fillSelectors([...new Set((latest || []).map((x) => `${x.assetId}|${x.point}`))]);
     if (telSel.assetId && telSel.point) {
       const s = await jget(`/api/v1/telemetry/series?asset_id=${encodeURIComponent(telSel.assetId)}&point=${encodeURIComponent(telSel.point)}&limit=180`);
+      telSeriesBuf.length = 0;
+      telSeriesBuf.push(...s.map((p) => [p.ts, p.value]));
       drawChart(s);
     }
   } catch (e) { /* 静默重试 */ }
@@ -360,6 +363,23 @@ function wsConnect() {
         refreshAlerts(); refreshHealth();
       } else if (m.type === 'alert-state') {
         refreshAlerts();
+      } else if (m.type === 'telemetry') {
+        for (const p of m.points || []) {
+          if (!topoValues.has(p.assetId)) topoValues.set(p.assetId, []);
+          const arr = topoValues.get(p.assetId);
+          const idx = arr.findIndex((x) => x.point === p.point);
+          if (idx >= 0) arr[idx] = p;
+          else arr.push(p);
+        }
+        if (currentView === 'topology') updateTopoValues(new Map());
+        if (currentView === 'telemetry' && telSel.assetId && chart) {
+          const hit = (m.points || []).find((p) => p.assetId === telSel.assetId && p.point === telSel.point);
+          if (hit) {
+            telSeriesBuf.push([hit.ts, hit.value]);
+            if (telSeriesBuf.length > 180) telSeriesBuf.shift();
+            chart.setOption({ series: [{ data: telSeriesBuf }] });
+          }
+        }
       }
     } catch { /* 忽略坏帧 */ }
   };

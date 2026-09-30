@@ -3,6 +3,7 @@ import cluster from 'node:cluster';
 import mqtt, { MqttClient } from 'mqtt';
 import { TelemetryService, TelemetryPoint } from '../telemetry/telemetry.service';
 import { RuleEngineService } from '../rule-engine/rule-engine.service';
+import { WsService } from '../ws/ws.service';
 
 /**
  * MQTT 设备接入服务（M1/M3）：
@@ -24,6 +25,7 @@ export class MqttIngestService implements OnModuleInit {
   constructor(
     private readonly tel: TelemetryService,
     private readonly engine: RuleEngineService,
+    private readonly ws: WsService,
   ) {}
 
   onModuleInit(): void {
@@ -58,13 +60,26 @@ export class MqttIngestService implements OnModuleInit {
         const key = String(body['src'] && (body['src'] as Record<string, unknown>)['asset'] ? JSON.stringify((body['src'] as Record<string, unknown>)['asset']) : deviceId);
         this.dispatchOrRun(key, deviceId, ts, { kind: 'evt', body, ts });
       }
+      // WS 遥测批播（主进程侧解析完成后即可推送，单/分片模式一致）
+      const assetId = String(body['asset_id'] ?? deviceId);
+      const points = body['points'] as Record<string, unknown> | undefined;
+      const wpts: { assetId: string; point: string; value: number; ts: number }[] = [];
+      if (points && typeof points === 'object') {
+        for (const [point, value] of Object.entries(points)) {
+          const num = Number(value);
+          if (Number.isFinite(num)) wpts.push({ assetId, point, value: num, ts });
+        }
+      } else if (body['point'] !== undefined && Number.isFinite(Number(body['value']))) {
+        wpts.push({ assetId, point: String(body['point']), value: Number(body['value']), ts });
+      }
+      if (wpts.length) this.ws.pushTelemetry(wpts);
     } catch (e) {
       this.logger.warn(`bad message ${topic}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
   /** 哈希分发：同 key 必落同 worker（窗口状态一致性）；无 worker 时主进程内联处理。 */
-  private dispatchOrRun(key: string, deviceId: string, ts: number, msg: { kind: string; deviceId: string; body: Record<string, unknown>; ts: number } | { kind: 'evt'; body: Record<string, unknown>; ts: number }): void {
+  private dispatchOrRun(key: string, deviceId: string, ts: number, msg: { kind: string; deviceId?: string; body: Record<string, unknown>; ts: number } | { kind: 'evt'; body: Record<string, unknown>; ts: number }): void {
     if (this.sharded) {
       const workers = Object.values(cluster.workers ?? {}).filter((w) => w?.isConnected());
       if (workers.length) {

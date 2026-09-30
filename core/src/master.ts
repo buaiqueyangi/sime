@@ -61,8 +61,12 @@ export async function bootstrapMaster(): Promise<void> {
   // 多 worker 分片：主进程接入 → 哈希分发；worker 告警回传 → WS 广播
   if (WORKERS > 1) {
     for (let i = 0; i < WORKERS; i++) cluster.fork({ SIME_SHARD: String(i) });
-    cluster.on('message', (_worker, msg: { type?: string; alert?: unknown }) => {
+    cluster.on('message', (_worker, msg: { type?: string; alert?: unknown; stats?: Record<string, unknown> }) => {
       if (msg?.type === 'alert' && msg.alert) wsSvc.broadcastAlert(msg.alert as never);
+      if (msg?.type === 'stats' && msg.stats) {
+        const pid = _worker.process.pid;
+        if (pid !== undefined) wsSvc.reportWorkerStats(pid, msg.stats);
+      }
     });
     cluster.on('exit', (w) => {
       console.log(`[sime-master] worker ${w.process.pid} exited, reforking...`);

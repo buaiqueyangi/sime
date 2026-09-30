@@ -34,6 +34,23 @@ export class WorkerMain {
       }
     });
 
+    // 统计上报（10s）：主进程聚合后供 /health 分片视图
+    setInterval(() => {
+      if (process.send) {
+        try {
+          process.send({
+            type: 'stats',
+            stats: {
+              shard: process.env.SIME_SHARD ?? '-',
+              rules: engineSvc.engine.rules.length,
+              alerts: engineSvc.engine.alerts.length,
+              telemetryBuffered: 0,
+            },
+          });
+        } catch { /* 忽略 */ }
+      }
+    }, 10000);
+
     process.on('message', (m: { kind?: string; deviceId?: string; body?: Record<string, unknown>; ts?: number }) => {
       try {
         const ts = Number(m?.ts) || Date.now();
