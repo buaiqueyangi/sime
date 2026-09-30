@@ -127,6 +127,18 @@ export function compileAdapter(def: AdapterDef): CompiledAdapter {
   };
 }
 
+/** 编译缓存：同一定义只编译一次（注册表条目为稳定单例，WeakMap 安全）。 */
+const compiledCache = new WeakMap<AdapterDef, CompiledAdapter>();
+
+export function getCompiled(def: AdapterDef): CompiledAdapter {
+  let c = compiledCache.get(def);
+  if (!c) {
+    c = compileAdapter(def);
+    compiledCache.set(def, c);
+  }
+  return c;
+}
+
 /** 样例驱动回归：适配器必须能解析自己的 sample 并产出时间戳与事件类别。 */
 export function sampleRegression(def: AdapterDef): { ok: boolean; error?: string } {
   try {

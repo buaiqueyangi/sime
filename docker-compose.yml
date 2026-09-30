@@ -34,6 +34,9 @@ services:
       SIME_PG_DDL_DIR: /app/assets/storage/pg/init
       SIME_MQTT_URL: mqtt://emqx:1883
       SIME_WORKERS: ${SIME_WORKERS:-1}
+      SIME_NOTIFY_WEBHOOK_URL: ${SIME_NOTIFY_WEBHOOK_URL:-}
+      SIME_NOTIFY_WECOM_WEBHOOK: ${SIME_NOTIFY_WECOM_WEBHOOK:-}
+      SIME_NOTIFY_DINGTALK_WEBHOOK: ${SIME_NOTIFY_DINGTALK_WEBHOOK:-}
       NODE_ENV: production
     ports:
       - "${SIME_HTTP_PORT:-3000}:3000"

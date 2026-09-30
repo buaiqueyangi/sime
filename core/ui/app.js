@@ -314,8 +314,20 @@ async function refreshResponses() {
           <td>${p.runs}</td></tr>`).join('')
       : '<tr><td colspan="4" class="empty">无剧本</td></tr>';
     $('rTickets').innerHTML = (r.tickets || []).length
-      ? r.tickets.map((t) => `<tr><td>${esc(t.title)}</td><td><span class="tag ${t.state === 'open' ? 'medium' : 'low'}">${esc(t.state)}</span></td><td class="dim">${rel(t.ts)}</td></tr>`).join('')
+      ? r.tickets.map((t) => `<tr><td>${esc(t.title)}</td>
+          <td><span class="tag ${t.state === 'closed' ? 'low' : 'medium'}">${esc(t.state)}</span></td>
+          <td class="dim">${rel(t.ts)}</td>
+          <td>${t.state !== 'closed' && t.id ? `<button class="mini resolve" data-ticket="${t.id}">关闭</button>` : ''}</td></tr>`).join('')
       : '<tr><td class="empty">暂无工单</td></tr>';
+    document.querySelectorAll('#rTickets [data-ticket]').forEach((b) => {
+      b.onclick = async () => {
+        try {
+          await jget(`/api/v1/responses/tickets/${b.dataset.ticket}/close`, { method: 'POST' });
+          toast(`工单 #${b.dataset.ticket} 已关闭`);
+          refreshResponses();
+        } catch (e) { toast('关闭失败: ' + e.message, true); }
+      };
+    });
     $('rNotify').innerHTML = (r.notifications || []).length
       ? r.notifications.map((n) => `<tr><td class="mono">notify.${esc(n.channel)}</td><td class="mono">${esc(n.groupKey)}</td><td class="dim">${rel(n.ts)}</td></tr>`).join('')
       : '<tr><td class="empty">暂无通知</td></tr>';

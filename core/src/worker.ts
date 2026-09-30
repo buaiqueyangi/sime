@@ -1,6 +1,7 @@
 import { AssetRegistryService } from './common/asset-registry.service';
 import { PgProfileService } from './common/pg-profile.service';
 import { ResponseService } from './response/response.service';
+import { NotifyService } from './notify/notify.service';
 import { RuleEngineService } from './rule-engine/rule-engine.service';
 import { TelemetryService } from './telemetry/telemetry.service';
 import { PlaybookService } from './soar/playbook.service';
@@ -18,7 +19,7 @@ export class WorkerMain {
     await pg.init();
     const registry = new AssetRegistryService();
     registry.onModuleInit();
-    const response = new ResponseService(pg);
+    const response = new ResponseService(pg, new NotifyService());
     const engineSvc = new RuleEngineService(registry, pg, response);
     engineSvc.onModuleInit();
     const tel = new TelemetryService(pg, registry, engineSvc);

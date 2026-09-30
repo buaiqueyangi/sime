@@ -35,6 +35,7 @@ interface NotificationsRow {
   alert_id: number | null;
   channel: string;
   payload: unknown;
+  status: Generated<string>;
   ts: Generated<Date>;
 }
 interface ResponseAuditRow {

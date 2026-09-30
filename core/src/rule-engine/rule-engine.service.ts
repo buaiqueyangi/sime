@@ -27,7 +27,7 @@ export class RuleEngineService implements OnModuleInit {
           this.logger.log('alerts persisted to pg');
           await this.syncRules();
           const backlog = this.pending.splice(0);
-          for (const a of backlog) void this.persist(a);
+          for (const a of backlog) void this.persistInsert(a);
           if (backlog.length) this.logger.log(`flushed ${backlog.length} buffered alert(s) to pg`);
         }
       })
@@ -69,8 +69,9 @@ export class RuleEngineService implements OnModuleInit {
   feed(event: Record<string, unknown>, tsMs: number): SimeAlert[] {
     const produced = this.engine.feed(event, tsMs);
     for (const a of produced) {
-      // PG 未就绪时先缓冲（启动早期接入方的告警不丢），初始化完成后回灌
-      if (this.pgActive) void this.persist(a);
+      // 副作用（处置/剧本/WS）总是执行；PG 持久化仅在激活时进行，未就绪先缓冲回灌
+      void this.dispatch(a);
+      if (this.pgActive) void this.persistInsert(a);
       else if (this.pending.length < 500) this.pending.push(a);
     }
     return produced;
@@ -78,18 +79,25 @@ export class RuleEngineService implements OnModuleInit {
 
   private pending: SimeAlert[] = [];
 
-  private async persist(a: SimeAlert): Promise<void> {
+  private async dispatch(a: SimeAlert): Promise<void> {
     try {
-      const id = await this.pg.insertAlert(a);
-      if (id) a.pgId = id;
-      await this.response.execute(a, id);
+      await this.response.execute(a, a.pgId ?? null);
       for (const fn of this.alertListeners) {
         try {
-          fn(a, id);
+          fn(a, a.pgId ?? null);
         } catch {
           /* 监听器异常不影响主链路 */
         }
       }
+    } catch (e) {
+      this.logger.warn(`alert dispatch failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  private async persistInsert(a: SimeAlert): Promise<void> {
+    try {
+      const id = await this.pg.insertAlert(a);
+      if (id) a.pgId = id;
     } catch (e) {
       this.logger.warn(`alert persist failed: ${e instanceof Error ? e.message : String(e)}`);
     }

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PgProfileService } from '../common/pg-profile.service';
+import { NotifyService } from '../notify/notify.service';
 import type { SimeAlert } from '../rule-engine/rule-engine';
 
 /**
@@ -21,7 +22,10 @@ export class ResponseService {
   private readonly logger = new Logger('Response');
   private memory: MemoryState = { tickets: [], notifications: [], audit: [] };
 
-  constructor(private readonly pg: PgProfileService) {}
+  constructor(
+    private readonly pg: PgProfileService,
+    private readonly notify: NotifyService,
+  ) {}
 
   async execute(alert: SimeAlert, alertId: number | null): Promise<void> {
     for (const raw of alert.actions ?? []) {
@@ -45,10 +49,12 @@ export class ResponseService {
           this.memory.tickets.unshift({ title, state: 'open', ts: Date.now() });
         } else if (name.startsWith('notify.')) {
           const channel = name.slice(7);
+          const nTitle = `${alert.ruleName} @ ${alert.groupKey}`;
+          const st = await this.notify.dispatch(channel, nTitle, { groupKey: alert.groupKey, severity: alert.severity });
           if (db)
             await db
               .insertInto('notifications')
-              .values({ alert_id: alertId, channel, payload: { groupKey: alert.groupKey, severity: alert.severity } })
+              .values({ alert_id: alertId, channel, payload: { groupKey: alert.groupKey, severity: alert.severity }, status: st })
               .execute();
           this.memory.notifications.unshift({ channel, groupKey: alert.groupKey, ts: Date.now() });
         } else {
@@ -87,7 +93,7 @@ export class ResponseService {
       db.selectFrom('response_audit').selectAll().orderBy('ts', 'desc').limit(20).execute(),
     ]);
     return {
-      tickets: tickets.map((t) => ({ title: t.title, state: t.state, ts: new Date(t.created_at).getTime() })),
+      tickets: tickets.map((t) => ({ id: t.id, title: t.title, state: t.state, ts: new Date(t.created_at).getTime() })),
       notifications: notifications.map((n) => ({
         channel: n.channel,
         groupKey: (n.payload as { groupKey?: string })?.groupKey ?? '-',

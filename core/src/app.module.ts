@@ -18,6 +18,7 @@ import { AuthController } from './auth/auth.controller';
 import { PlaybooksController } from './modules/playbooks/playbooks.controller';
 import { PlaybookService } from './soar/playbook.service';
 import { WsService } from './ws/ws.service';
+import { NotifyService } from './notify/notify.service';
 import { LakeService } from './lake/lake.service';
 import { LakeController } from './lake/lake.controller';
 import { TopologyService } from './topology/topology.service';
@@ -48,6 +49,7 @@ import { TopologyController } from './topology/topology.controller';
     AuthService,
     PlaybookService,
     WsService,
+    NotifyService,
     LakeService,
     TopologyService,
   ],
