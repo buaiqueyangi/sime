@@ -5,7 +5,7 @@ vendor_doc: "H3C Syslog 格式说明"
 protocol: syslog-udp
 parse:
   format: regex
-  template: '^(?<time>\S+\s+\S+)\s+(?<host>\S+)\s+%%(?<module>[^/]+)/(?<level>\d)/(?<mnemonic>[^:]+):\s+(?<message>.+)$'
+  template: '^(?<time>\S+\s+\S+\s+\S+)\s+(?<host>\S+)\s+%%(?<module>[^/]+)/(?<level>\d)/(?<mnemonic>[^:]+):\s+(?<message>.+)$'
 mapping:
   "@timestamp": "<time>"
   "host.name": "<host>"

@@ -5,7 +5,7 @@ vendor_doc: "SIME 内置通用模板"
 protocol: file
 parse:
   format: regex
-  template: '^(?<time>\S+\s+\S+)\s+(?<thread>\d+)\s+\[(?<level>[A-Za-z]+)\]\s+(?<msg>.+)$'
+  template: '^(?<time>\S+)\s+(?<thread>\d+)\s+\[(?<level>[A-Za-z]+)\]\s+(?<msg>.+)$'
 mapping:
   "@timestamp": "<time>"
   "process.thread": "<thread>"
