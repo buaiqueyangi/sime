@@ -1,0 +1,22 @@
+id: rule.host.system-time-tamper
+name: 系统时间篡改
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1070.008 清除时间戳信息"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('system_time_change','clock_step')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  系统时间篡改会扰乱日志关联、证书校验与定时任务（隐藏攻击痕迹的常见手段）：
+  核实 NTP 状态与变更操作人；非计划内变更恢复同步并回溯时间窗口内全部行为。
+references:
+  - https://attack.mitre.org/techniques/T1070/008/

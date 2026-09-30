@@ -1,0 +1,23 @@
+id: rule.net.arp-spoof
+name: ARP 欺骗（网关绑定异常）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: network-security
+tactics: ["TA0006 凭证访问", "TA0009 收集"]
+techniques: ["T1557 对手中间人"]
+severity: high
+detection:
+  source: event.network.flow
+  window: 5m
+  group_by: ["src.asset_id"]
+  condition: "event.name in ('arp_gateway_conflict','arp_spoof_detect')"
+response:
+  default: ["switch.port_isolate(src.mac)", "ticket.create(sla=15m)", "notify.net_admin"]
+triage: >
+  ARP 欺骗会劫持网关流量（嗅探凭据/篡改数据）：通过交换机端口隔离阻断
+  攻击源端口，定位物理接入位置并现场核查设备；工控网段出现 ARP 欺骗
+  按最高优先级处置（可能为人为接入或恶意软件）。
+references:
+  - https://attack.mitre.org/techniques/T1557/

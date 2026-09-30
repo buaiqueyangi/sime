@@ -1,0 +1,22 @@
+id: rule.container.privileged-pod
+name: 特权容器创建
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: container
+tactics: ["TA0004 权限提升"]
+techniques: ["T1610 部署容器"]
+severity: high
+detection:
+  source: adapter.k8s.audit
+  window: 1m
+  group_by: ["user.name"]
+  condition: "event.category == 'k8s-audit' and object.type == 'pods' and (object.name matches '.*' and verb in ('create','update')) and pod.security_context.privileged == true"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  特权容器等效宿主 root：核对部署清单与发布审批；非计划内特权容器立即
+  删除并审查创建者凭证，排查是否已挂载敏感路径（docker.sock、hostPath）。
+references:
+  - https://attack.mitre.org/techniques/T1610/

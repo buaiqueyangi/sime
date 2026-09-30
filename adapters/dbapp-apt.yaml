@@ -1,0 +1,30 @@
+id: adapter.dbapp.apt
+vendor: 安恒信息
+product: 明御 APT 攻击预警平台
+vendor_doc: "明御 APT V2.0R76 json3.5 外送接口文档"
+protocol: json-http
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.time"
+  "src.ip": "$.src_ip"
+  "dst.ip": "$.dst_ip"
+  "event.name": "$.event_name"
+  "event.category": "threat-detection"
+  "event.outcome": "detected"
+  "file.name": "$.file_name"
+  "file.hash.md5": "$.md5"
+  "event.severity": "lookup:$.level"
+  "sime.threat_id": "lookup:$.event_type"
+threat_map:
+  "apt_webshell": sime.tht.webshell-detect
+  "apt_trojan": sime.tht.trojan
+  "apt_c2": sime.tht.c2
+  "apt_0day": sime.tht.exploit
+normalize:
+  "event.severity":
+    "1": low
+    "2": medium
+    "3": high
+    "4": critical
+sample: '{"time":"2025-04-27 14:15:27","src_ip":"10.2.85.40","dst_ip":"203.0.113.201","event_type":"apt_c2","event_name":"远控C2外联确认","level":"4","file_name":"svc.exe","md5":"d41d8cd98f00b204e9800998ecf8427e"}'

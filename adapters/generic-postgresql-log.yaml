@@ -1,0 +1,18 @@
+id: adapter.generic.postgresql-log
+vendor: 通用
+product: PostgreSQL 服务日志（CSV 格式）
+vendor_doc: "SIME 内置通用模板"
+protocol: file
+parse:
+  format: kv
+  template: "ts=<ts> user=<user> db=<db> pid=<pid> level=<level> msg=<msg>"
+mapping:
+  "@timestamp": "<ts>"
+  "user.name": "<user>"
+  "db.instance": "<db>"
+  "process.pid": "<pid>"
+  "log.level": "<level>"
+  "event.category": "database"
+  "event.outcome": "detected"
+  "message": "<msg>"
+sample: "ts=2025-04-27 14:50:11 CST user=fin01 db=sime pid=8821 level=ERROR msg=permission denied for table salary"

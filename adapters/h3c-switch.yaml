@@ -1,0 +1,25 @@
+id: adapter.h3c.switch
+vendor: 新华三（H3C）
+product: H3C 交换机（端口/登录事件）
+vendor_doc: "H3C Syslog 格式说明"
+protocol: syslog-udp
+parse:
+  format: regex
+  template: '^(?<time>\S+\s+\S+)\s+(?<host>\S+)\s+%%(?<module>[^/]+)/(?<level>\d)/(?<mnemonic>[^:]+):\s+(?<message>.+)$'
+mapping:
+  "@timestamp": "<time>"
+  "host.name": "<host>"
+  "log.syslog.facility": "<module>"
+  "event.category": "network-device"
+  "event.severity": "lookup:<level>"
+  "message": "<message>"
+  "event.outcome": "detected"
+normalize:
+  "event.severity":
+    "1": alert
+    "2": critical
+    "3": high
+    "4": medium
+    "5": low
+    "6": info
+sample: "%Sep 29 14:31:05:2025 h3c-sw-01 %%10SHELL/5/SHELL_LOGIN(l): -V1-Admin; login from 10.8.20.31 succeeded"

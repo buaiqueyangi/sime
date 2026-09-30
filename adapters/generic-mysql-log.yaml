@@ -1,0 +1,16 @@
+id: adapter.generic.mysql-log
+vendor: 通用
+product: MySQL 错误/慢查询日志
+vendor_doc: "SIME 内置通用模板"
+protocol: file
+parse:
+  format: regex
+  template: '^(?<time>\S+\s+\S+)\s+(?<thread>\d+)\s+\[(?<level>[A-Za-z]+)\]\s+(?<msg>.+)$'
+mapping:
+  "@timestamp": "<time>"
+  "process.thread": "<thread>"
+  "log.level": "<level>"
+  "event.category": "database"
+  "event.outcome": "detected"
+  "message": "<msg>"
+sample: "2025-04-27T14:55:01.123456Z 77 [Note] Access denied for user 'root'@'10.8.20.31' (using password: YES)"

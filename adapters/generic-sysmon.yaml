@@ -1,0 +1,26 @@
+id: adapter.generic.sysmon
+vendor: 通用
+product: Windows Sysmon（JSON 外发）
+vendor_doc: "SIME 内置通用模板（Sysmon 1/3/11/13 事件映射）"
+protocol: json-http
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.UtcTime"
+  "src.ip": "$.SourceIp"
+  "dst.ip": "$.DestinationIp"
+  "dst.port": "$.DestinationPort"
+  "process.name": "$.Image"
+  "process.command_line": "$.CommandLine"
+  "user.name": "$.User"
+  "file.hash.sha256": "$.Hashes"
+  "event.name": "lookup:$.EventID"
+  "event.category": "endpoint"
+  "event.outcome": "detected"
+  "event.severity": "medium"
+threat_map:
+  "1": sime.tht.process-create
+  "3": sime.tht.c2
+  "11": sime.tht.file-create
+  "13": sime.tht.registry-modify
+sample: '{"UtcTime":"2025-04-27 14:45:33.201","EventID":"3","SourceIp":"10.2.88.44","DestinationIp":"1.2.3.4","DestinationPort":"443","Image":"C:\\Windows\\Temp\\svc.exe","CommandLine":"svc.exe -p 443","User":"NT AUTHORITY\\SYSTEM","Hashes":"SHA256=ABC123"}'

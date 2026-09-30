@@ -1,0 +1,27 @@
+id: adapter.fortigate.fw
+vendor: Fortinet
+product: FortiGate 下一代防火墙
+vendor_doc: "FortiGate Syslog 字段说明"
+protocol: syslog-udp
+parse:
+  format: kv
+  template: "date=<date> time=<time> srcip=<src_ip> dstip=<dst_ip> dstport=<dst_port> action=<action> attack=<attack_name> severity=<severity>"
+mapping:
+  "@timestamp": "lookup:<date>"
+  "src.ip": "<src_ip>"
+  "dst.ip": "<dst_ip>"
+  "dst.port": "<dst_port>"
+  "event.category": "firewall"
+  "event.outcome": "<action>"
+  "rule.name": "<attack_name>"
+  "event.severity": "<severity>"
+  "sime.threat_id": "lookup:<attack_name>"
+normalize:
+  "event.outcome":
+    deny: deny
+    drop: deny
+    accept: allow
+threat_map:
+  "sniffer": sime.tht.scan
+  "ips": sime.tht.exploit
+sample: "date=2025-04-27 time=14:22:03 srcip=203.0.113.150 dstip=10.2.85.132 dstport=3389 action=deny attack=sniffer severity=medium"

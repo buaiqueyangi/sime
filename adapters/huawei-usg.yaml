@@ -1,0 +1,23 @@
+id: adapter.huawei.usg
+vendor: 华为
+product: USG 防火墙
+vendor_doc: "USG6000 Syslog 格式说明"
+protocol: syslog-udp
+parse:
+  format: kv
+  template: "time=<time> src=<src_ip>:<src_port> dst=<dst_ip>:<dst_port> policy=<policy> action=<action> content=<content>"
+mapping:
+  "@timestamp": "<time>"
+  "src.ip": "<src_ip>"
+  "src.port": "<src_port>"
+  "dst.ip": "<dst_ip>"
+  "dst.port": "<dst_port>"
+  "rule.id": "<policy>"
+  "event.category": "firewall"
+  "event.outcome": "<action>"
+  "message": "<content>"
+normalize:
+  "event.outcome":
+    permit: allow
+    deny: deny
+sample: "time=2025-04-27 14:25:30 src=10.8.20.9:52001 dst=10.2.85.130:22 policy=trust2dmz action=deny content=ssh session denied by policy"

@@ -1,0 +1,28 @@
+id: adapter.topsec.tianzhen
+vendor: 启明星辰
+product: 天阗入侵检测与管理系统
+vendor_doc: "天阗分析平台 Syslog 格式说明"
+protocol: syslog-udp
+parse:
+  format: kv
+  template: "occur_time=<occur_time> src_address=<src_ip> dest_address=<dst_ip> event_name=<event_name> risk_level=<risk_level> handle=<handle>"
+mapping:
+  "@timestamp": "<occur_time>"
+  "src.ip": "<src_ip>"
+  "dst.ip": "<dst_ip>"
+  "event.name": "<event_name>"
+  "event.category": "intrusion-detection"
+  "event.outcome": "detected"
+  "event.severity": "<risk_level>"
+  "sime.threat_id": "lookup:<event_name>"
+normalize:
+  "event.severity":
+    "紧急": critical
+    "严重": high
+    "一般": medium
+    "警告": low
+threat_map:
+  "暴力破解": sime.tht.bruteforce
+  "端口扫描": sime.tht.scan
+  "后门连接": sime.tht.c2
+sample: "occur_time=2025-04-27 14:06:44 src_address=203.0.113.22 dest_address=10.2.85.131 event_name=暴力破解 risk_level=严重 handle=告警"

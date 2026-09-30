@@ -1,0 +1,27 @@
+id: adapter.k8s.audit
+vendor: CNCF
+product: Kubernetes API Server 审计日志
+vendor_doc: "Kubernetes Audit Policy 规范"
+protocol: file
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.stageTimestamp"
+  "user.name": "$.user.username"
+  "event.name": "$.verb"
+  "event.category": "k8s-audit"
+  "event.outcome": "lookup:$.stage"
+  "object.name": "$.objectRef.name"
+  "object.type": "$.objectRef.resource"
+  "src.ip": "$.sourceIPs[0]"
+  "event.severity": "lookup:$.verb"
+normalize:
+  "event.severity":
+    "delete": high
+    "create": medium
+    "update": low
+    "get": info
+threat_map:
+  "delete": sime.tht.destructive
+  "create": sime.tht.deploy
+sample: '{"stageTimestamp":"2025-04-27T14:40:22Z","user":{"username":"kubernetes-admin"},"verb":"delete","objectRef":{"resource":"pods","name":"fin-app-01"},"sourceIPs":["10.8.20.31"],"stage":"ResponseComplete"}'

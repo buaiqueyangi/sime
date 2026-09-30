@@ -1,0 +1,22 @@
+id: rule.host.ssh-key-added
+name: SSH 授权公钥写入
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持", "TA0008 横向移动"]
+techniques: ["T1098.004 SSH 授权密钥"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "file.path matches '.*authorized_keys' and event.action in ('create','modify','append')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.owner(dst.asset_id)", "notify.sec_team"]
+triage: >
+  authorized_keys 写入即获得免密登录通道（常用持久化/横向手段）：核对公钥指纹与
+  运维台账；未知公钥立即移除并回溯写入进程与来源会话。
+references:
+  - https://attack.mitre.org/techniques/T1098/004/

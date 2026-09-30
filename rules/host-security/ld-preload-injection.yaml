@@ -1,0 +1,22 @@
+id: rule.host.ld-preload-injection
+name: LD_PRELOAD 动态库注入
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1574.006 动态链接器劫持"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.command_line matches '(?i)ld_preload' or file.path matches '(?i)/etc/ld\\.so\\.preload'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  LD_PRELOAD 常用于隐藏进程/劫持函数（rootkit 常见手法）：核对注入来源与
+  .so 文件哈希；确认恶意后清除 preload 配置并排查同主机其他持久化项。
+references:
+  - https://attack.mitre.org/techniques/T1574/006/

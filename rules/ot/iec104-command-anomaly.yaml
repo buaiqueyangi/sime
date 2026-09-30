@@ -1,0 +1,23 @@
+id: rule.ot.iec104-command-anomaly
+name: IEC-104 控制命令异常（遥控/设点）
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0110 ICS 操纵"]
+techniques: ["T0855 未授权指令消息"]
+severity: critical
+detection:
+  source: adapter.generic.opcua-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and event.action in ('remote_control','set_point') and not time.in_shift(dst.asset.labels.shift)"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty", "notify.sec_team"]
+triage: >
+  IEC-104 遥控/设点命令（ASDU C_SC/C_DC/C_SE）直接影响生产过程：非值班时段
+  触发即阻断并双线通知。核对调度指令工单；确认误动作后复位，真实攻击转入
+  应急响应（溯源控制中心会话）。
+references:
+  - https://attack.mitre.org/techniques/T0855/

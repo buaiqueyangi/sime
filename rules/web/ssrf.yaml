@@ -1,0 +1,23 @@
+id: rule.web.ssrf
+name: SSRF 服务端请求伪造
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0001 初始访问"]
+techniques: ["T1190 利用面向公众的应用程序"]
+severity: high
+detection:
+  source: adapter.safeline.waf
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { ssrf_attempts: 5 }
+  condition: "url.query matches '(?i).*(=http://(127\\.0\\.0\\.1|localhost|169\\.254\\.169\\.254)|=file:///|=gopher://).*' and count() >= 5"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  探测元数据端点（169.254.169.254）或 file/gopher 协议为典型 SSRF 利用：
+  封禁源 IP；通知研发核查存在外链请求的功能点，收敛出网白名单。
+references:
+  - https://attack.mitre.org/techniques/T1190/

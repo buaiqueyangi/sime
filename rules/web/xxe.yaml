@@ -1,0 +1,22 @@
+id: rule.web.xxe
+name: XXE 外部实体注入
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0001 初始访问"]
+techniques: ["T1190 利用面向公众的应用程序"]
+severity: high
+detection:
+  source: adapter.safeline.waf
+  window: 5m
+  group_by: ["src.ip"]
+  condition: "http.request.body.content matches '(?i).*<!DOCTYPE.*ENTITY.*(SYSTEM|file://).*' and count() >= 1"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  XML 外部实体注入可用于文件读取与 SSRF：封禁源 IP，通知研发禁用外部实体
+  解析（libxml disallow DOCTYPE），回溯是否已有文件读取成功的响应特征。
+references:
+  - https://attack.mitre.org/techniques/T1190/

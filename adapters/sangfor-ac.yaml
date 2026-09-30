@@ -1,0 +1,19 @@
+id: adapter.sangfor.ac
+vendor: 深信服
+product: 上网行为管理（AC）
+vendor_doc: "深信服 AC Syslog 字段示例"
+protocol: syslog-udp
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.time"
+  "src.ip": "$.user_ip"
+  "user.name": "$.user_name"
+  "url.full": "$.url"
+  "url.domain": "$.domain"
+  "dst.ip": "$.dst_ip"
+  "event.category": "network-connection"
+  "event.outcome": "allow"
+  "http.request.method": "$.method"
+  "event.action": "$.behavior"
+sample: '{"time":"2025-04-27 14:11:02","user_ip":"10.8.20.31","user_name":"fin02","url":"http://pan.example.com/s/8f3","domain":"pan.example.com","dst_ip":"10.8.9.2","method":"GET","behavior":"文件上传"}'

@@ -1,0 +1,31 @@
+id: adapter.generic.opcua-audit
+vendor: 通用
+product: OPC UA 服务审计（工控协议审计探针输出）
+vendor_doc: "SIME 内置 OT 通用模板（Modbus/OPC-UA 探针共用契约）"
+protocol: json-http
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.ts"
+  "src.ip": "$.src_ip"
+  "src.asset.id": "$.src_asset"
+  "dst.ip": "$.dst_ip"
+  "dst.asset.id": "$.dst_asset"
+  "dst.asset.type": "$.dst_type"
+  "event.category": "ics-command"
+  "event.action": "$.action"
+  "event.outcome": "$.result"
+  "user.name": "$.operator"
+  "event.severity": "lookup:$.action"
+threat_map:
+  "write": sime.tht.plc-write
+  "program_download": sime.tht.firmware
+  "browse": sime.tht.recon
+  "read": sime.tht.collect
+normalize:
+  "event.severity":
+    "write": critical
+    "program_download": critical
+    "read": info
+    "browse": low
+sample: '{"ts":"2025-04-27 15:05:12","src_ip":"10.233.9.66","src_asset":"","dst_ip":"10.233.9.3","dst_asset":"dev-plc-002","dst_type":"plc","action":"write","result":"success","operator":"unknown"}'

@@ -80,10 +80,10 @@ async function main(): Promise<void> {
   /* 2. 资产库 */
   console.log('[2] 规则 / 适配器 / 物模型 / 剧本');
   const rules = await jget('/api/v1/rules');
-  check('规则库规模 ≥ 30', (rules.json?.length ?? 0) >= 30, `实际 ${rules.json?.length ?? 0}`);
+  check('规则库规模 ≥ 45', (rules.json?.length ?? 0) >= 45, `实际 ${rules.json?.length ?? 0}`);
   check('规则全部挂 ATT&CK 技术', (rules.json ?? []).every((x: any) => (x.techniques ?? []).length > 0));
   const adapters = await jget('/api/v1/adapters');
-  check('适配器规模 ≥ 15', (adapters.json?.length ?? 0) >= 15, `实际 ${adapters.json?.length ?? 0}`);
+  check('适配器规模 ≥ 28', (adapters.json?.length ?? 0) >= 28, `实际 ${adapters.json?.length ?? 0}`);
   const models = await jget('/api/v1/thing-models');
   check('物模型模板 ≥ 3', (models.json?.length ?? 0) >= 3);
   const pbs = await jget('/api/v1/playbooks');

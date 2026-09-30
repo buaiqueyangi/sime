@@ -1,0 +1,24 @@
+id: adapter.generic.docker-events
+vendor: 通用
+product: Docker 容器事件
+vendor_doc: "SIME 内置通用模板"
+protocol: json-http
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.time"
+  "container.id": "$.Actor.ID"
+  "container.name": "lookup:$.Actor.Attributes.name"
+  "host.name": "$.host"
+  "event.name": "$.Action"
+  "event.category": "container"
+  "event.outcome": "detected"
+  "event.severity": "lookup:$.Action"
+normalize:
+  "event.severity":
+    "die": high
+    "kill": high
+    "oom": critical
+    "start": info
+    "create": info
+sample: '{"time":"2025-04-27T15:00:41.123456789Z","Action":"oom","Actor":{"ID":"a1b2c3","Attributes":{"name":"fin-app-01"}},"host":"docker-host-01"}'

@@ -1,0 +1,23 @@
+id: adapter.vmware.esxi
+vendor: VMware（Broadcom）
+product: vSphere/ESXi 主机事件
+vendor_doc: "ESXi Syslog JSON 外发格式"
+protocol: json-http
+parse:
+  format: json
+mapping:
+  "@timestamp": "$.timestamp"
+  "host.name": "$.hostname"
+  "user.name": "$.username"
+  "event.name": "$.event_type"
+  "event.category": "virtualization"
+  "event.outcome": "detected"
+  "message": "$.message"
+  "event.severity": "lookup:$.severity"
+normalize:
+  "event.severity":
+    "info": info
+    "warning": medium
+    "error": high
+    "critical": critical
+sample: '{"timestamp":"2025-04-27 14:35:12","hostname":"esxi-02.lab.local","username":"svc-vmware","event_type":"vm.powered_off","message":"VM fin-app-01 powered off by svc-vmware","severity":"warning"}'

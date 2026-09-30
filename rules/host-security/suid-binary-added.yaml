@@ -1,0 +1,23 @@
+id: rule.host.suid-binary-added
+name: SUID 提权位文件新增
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0004 权限提升"]
+techniques: ["T1548.001 Setuid 和 Setgid"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('suid_added','suid_guid_added')"
+  except: "process.name in ('dpkg','rpm','yum','apt')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  SUID 位文件是本地提权经典路径：核对文件路径与发布记录；
+  非包管理器写入的 SUID 文件提取哈希送情报比对，确认恶意后移除权限位并溯源写入进程。
+references:
+  - https://attack.mitre.org/techniques/T1548/001/

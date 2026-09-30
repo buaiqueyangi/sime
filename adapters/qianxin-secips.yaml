@@ -1,0 +1,29 @@
+id: adapter.qianxin.secips
+vendor: 奇安信
+product: 网神 SecIPS 3600 入侵防御系统
+vendor_doc: "网神 SecIPS 3600 V4.0 Syslog 日志说明 V1.0"
+protocol: syslog-udp
+parse:
+  format: kv
+  template: "time=<time> src_ip=<src_ip> dst_ip=<dst_ip> dst_port=<dst_port> threat_id=<threat_id> threat_name=<threat_name> severity=<severity> action=<action>"
+mapping:
+  "@timestamp": "<time>"
+  "src.ip": "<src_ip>"
+  "dst.ip": "<dst_ip>"
+  "dst.port": "<dst_port>"
+  "rule.id": "<threat_id>"
+  "rule.name": "<threat_name>"
+  "event.category": "intrusion-detection"
+  "event.severity": "<severity>"
+  "event.outcome": "<action>"
+  "sime.threat_id": "lookup:<threat_id>"
+normalize:
+  "event.outcome":
+    允许: allow
+    阻断: deny
+threat_map:
+  "70001": sime.tht.bruteforce
+  "70002": sime.tht.scan
+  "70003": sime.tht.c2
+  "70004": sime.tht.sqli
+sample: "time=2025-04-27 14:02:11 src_ip=203.0.113.10 dst_ip=10.2.85.130 dst_port=445 threat_id=70002 threat_name=端口扫描攻击 severity=中 action=阻断"
