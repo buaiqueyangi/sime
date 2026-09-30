@@ -22,7 +22,7 @@ export class TelemetryController {
   }
 
   @Get('devices')
-  devices() {
+  async devices() {
     return this.tel.devices();
   }
 }

@@ -33,6 +33,7 @@ services:
       SIME_PG_PASSWORD: ${SIME_PG_PASSWORD:-sime-change-me}
       SIME_PG_DDL_DIR: /app/assets/storage/pg/init
       SIME_MQTT_URL: mqtt://emqx:1883
+      SIME_WORKERS: ${SIME_WORKERS:-1}
       NODE_ENV: production
     ports:
       - "${SIME_HTTP_PORT:-3000}:3000"

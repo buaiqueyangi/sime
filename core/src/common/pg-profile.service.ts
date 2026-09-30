@@ -122,6 +122,7 @@ export class PgProfileService implements OnModuleDestroy {
   }
 
   async init(): Promise<boolean> {
+    if (this.db) return true; // 幂等：多 worker/多次引导不重复建池
     if (!this.enabled) return false;
     const dir = process.env.SIME_PG_DDL_DIR ?? path.join('..', 'storage', 'pg', 'init');
     this.pool = new Pool({

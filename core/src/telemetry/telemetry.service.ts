@@ -119,6 +119,23 @@ export class TelemetryService {
 
   private welford = new Map<string, { n: number; mean: number; m2: number; lastAnomaly: number }>();
 
+  /** 分片接入入口：登记台账 + 解析测点 + 记录（含量程/UEBA 检查），主进程或 worker 均可调用。 */
+  ingest(deviceId: string, body: Record<string, unknown>, ts: number): void {
+    const assetId = String(body['asset_id'] ?? deviceId);
+    this.registerDevice(deviceId, assetId, String(body['kind'] ?? 'device'));
+    const pts: TelemetryPoint[] = [];
+    const points = body['points'] as Record<string, unknown> | undefined;
+    if (points && typeof points === 'object') {
+      for (const [point, value] of Object.entries(points)) {
+        const num = Number(value);
+        if (Number.isFinite(num)) pts.push({ assetId, point, value: num, ts });
+      }
+    } else if (body['point'] !== undefined && Number.isFinite(Number(body['value']))) {
+      pts.push({ assetId, point: String(body['point']), value: Number(body['value']), ts });
+    }
+    if (pts.length) this.record(pts);
+  }
+
   record(points: TelemetryPoint[]): void {
     if (!this.rangeMap.size) this.buildRangeMap();
     const db = this.pg.database;
@@ -240,9 +257,29 @@ export class TelemetryService {
     return merged.slice(-limit);
   }
 
-  devices(): { deviceId: string; assetId: string; kind: string; lastSeen: number }[] {
-    return [...this.deviceMap.entries()]
-      .map(([deviceId, d]) => ({ deviceId, assetId: d.assetId, kind: d.kind, lastSeen: d.lastSeen }))
-      .sort((a, b) => b.lastSeen - a.lastSeen);
+  async devices(): Promise<{ deviceId: string; assetId: string; kind: string; lastSeen: number }[]> {
+    if (this.deviceMap.size) {
+      return [...this.deviceMap.entries()]
+        .map(([deviceId, d]) => ({ deviceId, assetId: d.assetId, kind: d.kind, lastSeen: d.lastSeen }))
+        .sort((a, b) => b.lastSeen - a.lastSeen);
+    }
+    const db = this.pg.database;
+    if (!db) return [];
+    const devs = (await db.selectFrom('devices').selectAll().limit(500).execute()) as unknown as {
+      id: string;
+      asset_id: string;
+      last_seen_at: string | Date | null;
+    }[];
+    const assetIds = [...new Set(devs.map((d) => d.asset_id))];
+    const assets = assetIds.length
+      ? (await db.selectFrom('assets').select(['id', 'type']).where('id', 'in', assetIds).execute()) as unknown as { id: string; type: string }[]
+      : [];
+    const typeById = new Map(assets.map((a) => [a.id, a.type]));
+    return devs.map((d) => ({
+      deviceId: d.id,
+      assetId: d.asset_id,
+      kind: typeById.get(d.asset_id) ?? 'device',
+      lastSeen: d.last_seen_at ? new Date(d.last_seen_at).getTime() : 0,
+    }));
   }
 }

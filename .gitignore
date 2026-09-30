@@ -6,3 +6,4 @@ coverage/
 .env.local
 demo/out/
 .DS_Store
+core/data/

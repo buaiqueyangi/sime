@@ -36,9 +36,11 @@ client.on('connect', () => {
   console.log(`[sime-sim] connected ${url} (interval=${intervalMs}ms, burst=${burstSec}s, loop=${loop})`);
   const flood = Number(arg('--flood', '0'));
   if (flood > 0) {
-    // 接入压测：全速发布 flood 条遥测后退出（QoS1：EMQX 为慢订阅者排队，保证送达）
-    console.log(`[sime-sim] flood mode: publishing ${flood} telemetry messages (qos1)...`);
+    // 接入压测：QoS1 发布 flood 条遥测，等待全部 PUBACK 后退出（否则 mqtt.js 内部队列随进程退出丢失）
+    console.log(`[sime-sim] flood mode: publishing ${flood} telemetry messages (qos1, await PUBACK)...`);
     const t0 = Date.now();
+    let acked = 0;
+    client.publish(`sime/v1/sim-flood/event`, JSON.stringify({ start: true }), { qos: 1 });
     for (let i = 0; i < flood; i++) {
       const payload = JSON.stringify({
         asset_id: `dev-bench-${i % 1000}`,
@@ -46,10 +48,16 @@ client.on('connect', () => {
         ts: new Date().toISOString(),
         points: { load_percent: Math.round((i % 100) * 100) / 100 },
       });
-      client.publish(`sime/v1/dev-bench-${i % 1000}/telemetry`, payload, { qos: 1 });
+      client.publish(`sime/v1/dev-bench-${i % 1000}/telemetry`, payload, { qos: 1 }, () => {
+        acked++;
+        if (acked % 25000 === 0) console.log(`  acked ${acked}/${flood}`);
+        if (acked === flood) {
+          console.log(`[sime-sim] all PUBACK received: ${flood} msgs in ${Date.now() - t0}ms (发布侧)`);
+          setTimeout(() => process.exit(0), 3000);
+        }
+      });
     }
-    console.log(`[sime-sim] published ${flood} msgs in ${Date.now() - t0}ms (发布侧)`);
-    setTimeout(() => { console.log('[sime-sim] flood done'); process.exit(0); }, 15000);
+    setTimeout(() => { console.log(`[sime-sim] flood timeout: acked=${acked}/${flood}`); process.exit(0); }, 180000);
     return;
   }
   setInterval(tick, intervalMs);
