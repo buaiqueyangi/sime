@@ -56,7 +56,7 @@ function toast(msg, isErr = false) {
 }
 
 /* ===== 视图切换 ===== */
-const TITLES = { overview: '概览', alerts: '实时告警', telemetry: '设备遥测', topology: '组态总览', rules: '检测规则库', catalog: '适配与物模型', response: '处置闭环', lake: '数据湖' };
+const TITLES = { overview: '概览', alerts: '实时告警', telemetry: '设备遥测', topology: '组态总览', rules: '检测规则库', catalog: '适配与物模型', response: '处置闭环', lake: '数据湖', assistant: 'AI 助手' };
 let currentView = 'overview';
 
 function showView(v) {
@@ -68,6 +68,7 @@ function showView(v) {
   if (v === 'response') refreshResponses();
   if (v === 'lake') refreshLake();
   if (v === 'topology') refreshTopology();
+  if (v === 'assistant') initAssistant();
   if (v === 'alerts') refreshAlerts();
 }
 document.querySelectorAll('#nav a').forEach((a) => (a.onclick = () => showView(a.dataset.view)));
@@ -615,3 +616,49 @@ setInterval(refreshAlerts, 3000);
 setInterval(refreshTelemetry, 2000);
 setInterval(refreshTopology, 2000);
 setInterval(refreshTrend, 30000);
+
+/* ===== AI 运维助手 ===== */
+let aiBooted = false;
+const chatHist = [];
+
+async function initAssistant() {
+  if (aiBooted) return;
+  aiBooted = true;
+  try {
+    const s = await jget('/api/v1/assistant/status');
+    $('aiMode').textContent = `模式：${s.mode} · 工具 ${s.tools} 个`;
+  } catch (e) {
+    $('aiMode').textContent = '状态获取失败';
+  }
+}
+
+async function sendChat() {
+  const box = $('chatText');
+  const text = box.value.trim();
+  if (!text) return;
+  box.value = '';
+  const log = $('chatLog');
+  const u = document.createElement('div');
+  u.className = 'chat-msg user';
+  u.textContent = text;
+  log.appendChild(u);
+  const a = document.createElement('div');
+  a.className = 'chat-msg ai';
+  a.textContent = '思考中…';
+  log.appendChild(a);
+  log.scrollTop = log.scrollHeight;
+  try {
+    const j = await jget('/api/v1/assistant/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, history: chatHist.slice(-8) }),
+    });
+    a.textContent = j.answer + (j.stub ? '\n（离线演示模式 — 配置 SIME_LLM_BASEURL 接入真实大模型）' : '');
+    chatHist.push({ role: 'user', content: text });
+    chatHist.push({ role: 'assistant', content: j.answer });
+  } catch (e) {
+    a.textContent = '出错了：' + e.message;
+  }
+  log.scrollTop = log.scrollHeight;
+}
+$('chatSend').onclick = sendChat;
+$('chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });

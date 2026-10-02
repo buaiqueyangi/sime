@@ -126,18 +126,32 @@ export class PgProfileService implements OnModuleDestroy {
     if (this.db) return true; // 幂等：多 worker/多次引导不重复建池
     if (!this.enabled) return false;
     const dir = process.env.SIME_PG_DDL_DIR ?? path.join('..', 'storage', 'pg', 'init');
-    this.pool = new Pool({
-      host: process.env.SIME_PG_HOST,
-      port: Number(process.env.SIME_PG_PORT ?? 5432),
-      user: process.env.SIME_PG_USER ?? 'sime',
-      password: process.env.SIME_PG_PASSWORD ?? 'sime-change-me',
-      database: process.env.SIME_PG_DB ?? 'sime',
-    });
-    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
-    for (const f of files) await this.pool.query(fs.readFileSync(path.join(dir, f), 'utf8')); // 全部 IF NOT EXISTS，幂等
-    this.db = new Kysely<DB>({ dialect: new PostgresDialect({ pool: this.pool }) });
-    this.logger.log(`pg profile active, DDL ensured: ${files.join(', ')}`);
-    return true;
+    // 重试：postgres 晚于 core 启动（容器编排常见）不应让平台永久锁死在内存模式
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        this.pool = new Pool({
+          host: process.env.SIME_PG_HOST,
+          port: Number(process.env.SIME_PG_PORT ?? 5432),
+          user: process.env.SIME_PG_USER ?? 'sime',
+          password: process.env.SIME_PG_PASSWORD ?? 'sime-change-me',
+          database: process.env.SIME_PG_DB ?? 'sime',
+          connectionTimeoutMillis: 5000,
+        });
+        await this.pool.query('SELECT 1');
+        const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+        for (const f of files) await this.pool.query(fs.readFileSync(path.join(dir, f), 'utf8')); // 全部 IF NOT EXISTS，幂等
+        this.db = new Kysely<DB>({ dialect: new PostgresDialect({ pool: this.pool }) });
+        this.logger.log(`pg profile active, DDL ensured: ${files.join(', ')}`);
+        return true;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`pg init attempt ${attempt}/5 failed: ${msg}`);
+        await this.pool?.end().catch(() => undefined);
+        this.pool = undefined;
+        if (attempt < 5) await new Promise((r) => setTimeout(r, 5000 * attempt));
+      }
+    }
+    return false;
   }
 
   async insertAlert(a: SimeAlert): Promise<number | null> {

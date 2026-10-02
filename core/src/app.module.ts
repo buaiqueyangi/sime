@@ -23,6 +23,8 @@ import { LakeService } from './lake/lake.service';
 import { LakeController } from './lake/lake.controller';
 import { TopologyService } from './topology/topology.service';
 import { TopologyController } from './topology/topology.controller';
+import { AssistantService } from './assistant/assistant.service';
+import { AssistantController } from './assistant/assistant.controller';
 
 @Module({
   controllers: [
@@ -38,6 +40,7 @@ import { TopologyController } from './topology/topology.controller';
     PlaybooksController,
     LakeController,
     TopologyController,
+    AssistantController,
   ],
   providers: [
     AssetRegistryService,
@@ -52,6 +55,7 @@ import { TopologyController } from './topology/topology.controller';
     NotifyService,
     LakeService,
     TopologyService,
+    AssistantService,
   ],
 })
 export class AppModule {}
