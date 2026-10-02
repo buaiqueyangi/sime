@@ -1,0 +1,22 @@
+id: rule.win.vss-volume-shadow-delete
+name: 卷影副本删除（勒索前奏）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避", "TA0040 影响"]
+techniques: ["T1490 阻止系统恢复"]
+severity: critical
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.command_line matches '(?i)(vssadmin.*delete.*shadows|wmic.*shadowcopy.*delete|bcdedit.*recoveryenabled.*no)'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  删除卷影副本是勒索软件的标准前置（阻断恢复手段）：无条件隔离主机并
+  断开网络共享；立即核查文件加密迹象，启动备份恢复预案。
+references:
+  - https://attack.mitre.org/techniques/T1490/

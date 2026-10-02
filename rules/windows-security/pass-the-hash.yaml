@@ -1,0 +1,22 @@
+id: rule.win.pass-the-hash
+name: Pass-the-Hash 特征（NTLM 空主机名登录）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0008 横向移动"]
+techniques: ["T1550.002 Pass the Hash"]
+severity: critical
+detection:
+  source: adapter.generic.windows-event
+  window: 5m
+  group_by: ["src.ip"]
+  condition: "event.code == '4624' and auth.lm_packages in ('NTLM','KERBEROS') and user.name != '' and src.ip != '' and count_distinct(dst.asset_id) >= 3 and event.name != 'interactive'"
+response:
+  default: ["isolate.host(src.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  NTLM 非交互登录扩散到多主机是 Pass-the-Hash 横向移动：立即隔离源主机
+  并重置相关账户；域环境同步排查 Kerberos 票据异常（配合黄金/白银票据检测）。
+references:
+  - https://attack.mitre.org/techniques/T1550/002/

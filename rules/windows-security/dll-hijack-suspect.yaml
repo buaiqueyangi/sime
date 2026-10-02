@@ -1,0 +1,22 @@
+id: rule.win.dll-hijack-suspect
+name: 可疑路径 DLL 加载（DLL 劫持）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持", "TA0005 防御规避"]
+techniques: ["T1574.001 DLL 搜索顺序劫持"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '7' and file.path matches '(?i)^(C:\\\\Users\\\\|C:\\\\Windows\\\\Temp|C:\\\\ProgramData).*\\.dll$' and process.name matches '(?i)(explorer|svchost|services)\\.exe'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  系统/特权进程从用户可写路径加载 DLL 是搜索顺序劫持（持久化或提权）：
+  核对 DLL 签名与哈希；未签名/低 prevalence 的按恶意处理并删除。
+references:
+  - https://attack.mitre.org/techniques/T1574/001/

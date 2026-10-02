@@ -52,8 +52,8 @@ export function tokenize(src: string): Token[] {
       i = end + 1;
       continue;
     }
-    if (/[0-9]/.test(c)) {
-      const m = /^(\d+[smhd])|(\d+(\.\d+)?)/.exec(src.slice(i));
+    if (/[0-9]/.test(c) || (c === '-' && /[0-9]/.test(src[i + 1] ?? ''))) {
+      const m = /^(-?\d+[smhd])|(-?\d+(\.\d+)?)/.exec(src.slice(i));
       if (!m) throw err('非法数字', i);
       toks.push({ kind: m[1] ? 'dur' : 'num', value: m[0], pos: i });
       i += m[0].length;

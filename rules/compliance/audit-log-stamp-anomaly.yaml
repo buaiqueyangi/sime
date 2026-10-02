@@ -1,0 +1,24 @@
+id: rule.cp.audit-log-stamp-anomaly
+name: 审计日志时间戳回拨（等保-安全审计）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0005 防御规避"]
+techniques: ["T1070.008 清除时间戳信息"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('ntp_step','time_change') and time.delta_seconds <= -300"
+response:
+  default: ["ticket.create(sla=60m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  系统时间回拨 5 分钟以上（等保时钟同步项）：会导致日志时序错乱、证书
+  校验异常、计划任务紊乱。核实 NTP 与手动变更操作；非计划内回拨后回溯
+  该时段内全部日志与行为。
+references:
+  - GB/T 22239-2019 8.1.4.3 安全审计
+  - https://attack.mitre.org/techniques/T1070/008/

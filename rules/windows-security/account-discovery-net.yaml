@@ -1,0 +1,27 @@
+id: rule.win.account-discovery-net
+name: 账户/组发现命令（net 类）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0007 发现"]
+techniques: ["T1087.001 本地域账户发现"]
+severity: low
+detection:
+  source: adapter.generic.sysmon
+  window: 10m
+  group_by: ["dst.asset_id"]
+  threshold: { discovery_cmds: 8 }
+  condition: "process.command_line matches '(?i)^net (user|group|localgroup|view)' and count() >= 8"
+  except: "user.name matches '(?i)^(admin|it-audit|scan)$'"
+response:
+  default: ["notify.sec_team"]
+  escalate:
+    - when: "count() >= 30"
+      do: ["ticket.create(sla=60m)"]
+triage: >
+  net user/group 批量枚举是内网侦察标配（配合血麒麟/ADExplorer 等工具）：
+  低危先观察画像；高频或来自非运维主机时结合登录事件判定横向移动意图。
+references:
+  - https://attack.mitre.org/techniques/T1087/001/

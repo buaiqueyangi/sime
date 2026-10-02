@@ -1,0 +1,22 @@
+id: rule.win.defender-exclusion-added
+name: Defender 排除项添加
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.001 削弱防御工具"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.command_line matches '(?i)Add-MpPreference.*-Exclusion(Path|Extension)'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  排除项是攻击者给后续载荷开白名单的前置动作：立即核查排除路径与操作来源；
+  非计划内排除项移除并回溯排除目录内的全部落盘文件。
+references:
+  - https://attack.mitre.org/techniques/T1562/001/

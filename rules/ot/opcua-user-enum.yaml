@@ -1,0 +1,24 @@
+id: rule.ot.opcua-user-enum
+name: OPC UA 用户会话枚举
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0007 发现"]
+techniques: ["T0862 欺骗报告源"]
+severity: medium
+detection:
+  source: adapter.generic.opcua-audit
+  window: 10m
+  group_by: ["src.ip"]
+  threshold: { session_creates: 10 }
+  condition: "event.category == 'ics-command' and event.action == 'session_create' and count() >= 10"
+  except: "src.asset_id.labels.role == 'scada-master'"
+response:
+  default: ["ticket.create", "notify.ot_duty"]
+triage: >
+  大量 OPC UA 会话创建尝试是对工控服务器的用户/权限枚举：核对会话身份
+  与来源；非计划内主机按未授权接入处置，同时检查 OPC UA 服务器安全策略。
+references:
+  - https://attack.mitre.org/techniques/T0862/

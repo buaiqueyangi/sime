@@ -1,0 +1,22 @@
+id: rule.win.bits-abuse
+name: BITS 滥用下载/持久化
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0011 命令与控制", "TA0003 权限维持"]
+techniques: ["T1197 BITS 作业"]
+severity: medium
+detection:
+  source: adapter.generic.sysmon
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "process.name matches '(?i)bitsadmin' and process.command_line matches '(?i)(/transfer|/create|/setnotifyflags)'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  BITS 可绕过代理下载载荷并支持持久化（系统服务身份运行）：核查下载 URL
+  信誉与目标文件哈希；确认恶意后删除 BITS 作业并清理落盘文件。
+references:
+  - https://attack.mitre.org/techniques/T1197/

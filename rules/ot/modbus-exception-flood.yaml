@@ -1,0 +1,26 @@
+id: rule.ot.modbus-exception-flood
+name: Modbus 异常响应洪泛
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0011 命令与控制"]
+techniques: ["T0847 非常态响应"]
+severity: high
+detection:
+  source: adapter.generic.opcua-audit
+  window: 5m
+  group_by: ["dst.asset_id"]
+  threshold: { exception_responses: 50 }
+  condition: "event.category == 'ics-command' and modbus.function_code matches '8[3-4]' and count() >= 50"
+response:
+  default: ["ticket.create(sla=15m)", "notify.ot_duty"]
+  escalate:
+    - when: "count() >= 200"
+      do: ["plc.deny(dst.asset_id)", "isolate.host(src.asset_id)"]
+triage: >
+  Modbus 异常响应（功能码 131/132）高频说明主站持续发送非法请求：排查
+  是扫描工具还是恶意软件探测 PLC 寄存器映射；确认恶意后阻断并隔离。
+references:
+  - https://attack.mitre.org/techniques/T0847/
