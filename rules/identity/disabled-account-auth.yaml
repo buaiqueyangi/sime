@@ -1,0 +1,22 @@
+id: rule.identity.disabled-account-auth
+name: 已禁用账户认证尝试
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: identity
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1078.001 默认账户"]
+severity: high
+detection:
+  source: event.security.auth
+  window: 5m
+  group_by: ["user.name"]
+  condition: "user.labels.status == 'disabled' and count() >= 3"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  已禁用账户出现认证尝试：提示该账户凭证已在外部流通或被猜测。核实尝试
+  来源；同源多账户尝试转入暴力破解链路处置。
+references:
+  - https://attack.mitre.org/techniques/T1078/001/

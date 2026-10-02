@@ -1,0 +1,23 @@
+id: rule.net.ntp-amplification
+name: NTP 放大攻击特征
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: network-security
+tactics: ["TA0006 凭证访问", "TA0008 横向移动"]
+techniques: ["T1498.002 反射放大"]
+severity: high
+detection:
+  source: event.network.flow
+  window: 5m
+  group_by: ["src.asset_id"]
+  threshold: { monlist_packets: 20 }
+  condition: "network.protocol == 'ntp' and count() >= 20 and network.bytes_ratio >= 20"
+response:
+  default: ["firewall.block(src.ip, ttl=12h)", "notify.net_admin", "ticket.create"]
+triage: >
+  NTP monlist 放大（请求小响应大，流量比 >20:1）：确认为被利用的反射源后
+  封禁并升级 NTP 服务版本（禁用 monlist）；若为我方设备对外反射，立即整改。
+references:
+  - https://attack.mitre.org/techniques/T1498/002/

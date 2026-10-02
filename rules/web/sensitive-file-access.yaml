@@ -1,0 +1,26 @@
+id: rule.web.sensitive-file-access
+name: 敏感配置文件探测
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1552.001 非安全存储的凭证"]
+severity: high
+detection:
+  source: adapter.generic.nginx-access
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { probes: 5 }
+  condition: "url.path matches '(?i).*(\\.env|\\.git/config|web\\.config|\\.aws/credentials|id_rsa|\\.bak|database\\.yml).*' and http.response.status_code in ('200','403')"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create"]
+  escalate:
+    - when: "http.response.status_code == '200'"
+      do: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  .env/.git/密钥文件探测是拿凭证的前置动作：403/200 都要处理——200 表示
+  文件可读即已泄露，立即轮换相关密钥并下线暴露路径。
+references:
+  - https://attack.mitre.org/techniques/T1552/001/

@@ -1,0 +1,25 @@
+id: rule.web.upload-extension-bypass
+name: 上传扩展名绕过检测
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0003 权限维持"]
+techniques: ["T1505.003 Web Shell"]
+severity: high
+detection:
+  source: adapter.safeline.waf
+  window: 5m
+  group_by: ["src.ip", "dst.asset_id"]
+  condition: "http.request.method == 'POST' and url.path matches '.*(upload|attach|import).*' and file.name matches '(?i).*\\.(php\\d?|phtml|jsp|jspx|aspx?|cer|cdx)([.;].*)?$'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+  escalate:
+    - when: "event.outcome == 'allow'"
+      do: ["notify.owner(dst.asset_id)", "file.quarantine(file.name)"]
+triage: >
+  双扩展/大小写/分号绕过是上传getshell标准手法：放行成功的立即隔离文件并
+  核查落盘；拦截成功的也要评估目标应用是否存在解析漏洞（IIS 分号解析等）。
+references:
+  - https://attack.mitre.org/techniques/T1505/003/

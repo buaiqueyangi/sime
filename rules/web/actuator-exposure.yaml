@@ -1,0 +1,26 @@
+id: rule.web.actuator-exposure
+name: Spring Actuator 管理端点暴露探测
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0007 发现"]
+techniques: ["T1592 主机信息收集"]
+severity: medium
+detection:
+  source: adapter.generic.nginx-access
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { actuator_probes: 5 }
+  condition: "url.path matches '(?i)^/actuator' and count() >= 5"
+response:
+  default: ["notify.sec_team"]
+  escalate:
+    - when: "http.response.status_code in ('200','302')"
+      do: ["ticket.create(sla=60m)", "notify.owner(dst.asset_id)"]
+triage: >
+  Actuator/env 端点可泄露配置与凭证，heapdump 可直接拿内存凭证：
+  探测集中出现时核查生产应用 management.endpoints 暴露面，非必要全部关闭。
+references:
+  - https://attack.mitre.org/techniques/T1592/

@@ -1,0 +1,22 @@
+id: rule.host.sudo-group-added
+name: 用户加入 sudo/wheel 提权组
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持", "TA0004 权限提升"]
+techniques: ["T1078.003 本地账户"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('sudo_group_add','wheel_group_add','group_member_add') and group_name matches '(?i)^(sudo|wheel|admin)$'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  提权组成员变更是最高风险权限动作：逐条核对变更工单；非计划内立即移除并
+  审查该账户近期全部活动（登录来源/执行的命令/新建文件）。
+references:
+  - https://attack.mitre.org/techniques/T1078/003/

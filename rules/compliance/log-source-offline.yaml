@@ -1,0 +1,23 @@
+id: rule.cp.log-source-offline
+name: 日志源离线超阈值（等保-安全审计）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.002 削弱主机日志"]
+severity: high
+detection:
+  source: event.telemetry
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name == 'log_source_offline' and count() >= 1"
+response:
+  default: ["ticket.create(sla=60m)", "notify.sec_team"]
+triage: >
+  等保安全审计要求日志源在线率可度量：关键资产日志静默即告警（攻击者
+  常先断日志再动手）。核实采集器与网络；连续 2 次超期升级为高危并现场检查。
+references:
+  - GB/T 22239-2019 8.1.4.3 安全审计
+  - https://attack.mitre.org/techniques/T1562/002/

@@ -1,0 +1,22 @@
+id: rule.host.process-injection-ptrace
+name: ptrace 进程注入
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0004 权限提升"]
+techniques: ["T1055.008 Ptrace 系统调用注入"]
+severity: critical
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('ptrace_attach','process_injection') or process.command_line matches '(?i)^(gdb|strace).*-p\\s+[0-9]+'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  ptrace 注入可窃取凭据/隐藏 payload（rootkit 常用）：立即隔离主机并转储
+  目标进程内存取证；核查注入来源进程与执行账号。
+references:
+  - https://attack.mitre.org/techniques/T1055/008/

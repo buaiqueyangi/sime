@@ -1,0 +1,25 @@
+id: rule.email.phishing-attachment
+name: 可疑附件邮件（宏/脚本/双扩展）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: email
+tactics: ["TA0001 初始访问"]
+techniques: ["T1566.001 鱼叉式钓鱼附件"]
+severity: high
+detection:
+  source: event.email.flow
+  window: 5m
+  group_by: ["dst.user.name"]
+  condition: "email.direction == 'inbound' and (email.attachments matches '(?i)\\.(docm|xlsm|pptm|one|hta|iso|img|lnk)$' or file.name matches '(?i).*\\.(docm|xlsm|hta|lnk|iso)$')"
+response:
+  default: ["notify.sec_team", "notify.owner(dst.user.name)"]
+  escalate:
+    - when: "count() >= 3"
+      do: ["ticket.create(sla=30m)"]
+triage: >
+  宏文档/镜像/快捷方式附件是定向钓鱼主力载荷：通知收件人不要打开；
+  确认有打开行为的终端立即排查 Office 派生进程（配合 office-spawn 规则）。
+references:
+  - https://attack.mitre.org/techniques/T1566/001/

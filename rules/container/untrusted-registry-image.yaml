@@ -1,0 +1,22 @@
+id: rule.container.untrusted-registry-image
+name: 非信任仓库镜像部署
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: container
+tactics: ["TA0001 初始访问"]
+techniques: ["T1610 部署容器"]
+severity: medium
+detection:
+  source: adapter.k8s.audit
+  window: 5m
+  group_by: ["user.name"]
+  condition: "event.category == 'k8s-audit' and object.type == 'pods' and image.registry not in ('harbor.internal','ghcr.io/buaiqueyangi','docker.io/library','registry.cn-hangzhou.aliyuncs.com/sime')"
+response:
+  default: ["ticket.create(sla=60m)", "notify.sec_team"]
+triage: >
+  非信任仓库镜像可能携带后门或挖矿（供应链投毒）：核对镜像来源与审批记录；
+  未审批镜像立即驱逐，并将仓库加入白名单评审流程。
+references:
+  - https://attack.mitre.org/techniques/T1610/

@@ -1,0 +1,25 @@
+id: rule.win.scheduled-task-new
+name: Windows 新建计划任务
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持", "TA0002 执行"]
+techniques: ["T1053.005 计划任务"]
+severity: medium
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code in ('4698','4699') or event.name in ('scheduled_task_create')"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+  escalate:
+    - when: "process.name matches '(?i)(powershell|cmd|wscript|mshta)' or file.path matches '(?i)(temp|appdata|public)'"
+      do: ["notify.sec_team"]
+triage: >
+  计划任务是 Windows 持久化首选（可提权、可隐匿）：核对任务动作与发布记录；
+  由脚本进程创建或落在临时目录的按可疑处置并转储任务 XML 研判。
+references:
+  - https://attack.mitre.org/techniques/T1053/005/

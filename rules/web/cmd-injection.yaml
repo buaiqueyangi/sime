@@ -1,0 +1,22 @@
+id: rule.web.cmd-injection
+name: 命令注入攻击特征
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0001 初始访问", "TA0002 执行"]
+techniques: ["T1059 命令与脚本解释器"]
+severity: critical
+detection:
+  source: adapter.safeline.waf
+  window: 1m
+  group_by: ["src.ip"]
+  condition: "url.query matches '(?i).*(;|&&|\\|)\\s*(cat|whoami|id|uname|wget|curl)\\s.*' or http.request.body.content matches '(?i).*(;|&&|\\|)\\s*(cat|whoami|uname)\\s+/'"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  命令注入直接影响主机 shell：封禁源 IP 并核查目标应用是否成功执行（回显特征）；
+  结合 HIDS 进程事件确认是否已有命令落地，成功则按主机失陷处置。
+references:
+  - https://attack.mitre.org/techniques/T1059/

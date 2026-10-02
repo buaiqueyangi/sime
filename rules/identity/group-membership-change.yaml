@@ -1,0 +1,23 @@
+id: rule.identity.group-membership-change
+name: 安全组成员变更（身份组）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: identity
+tactics: ["TA0003 权限维持"]
+techniques: ["T1098 账户操作"]
+severity: medium
+detection:
+  source: event.security.auth
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('group_member_add','role_grant') and group_name matches '(?i)(admin|security|audit|dba)'"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+triage: >
+  安全/审计/DBA 组成员变更直接影响权限基线（等保访问控制项）：逐条核对
+  审批工单；非计划内授权立即回收并审查新成员近期行为。
+references:
+  - GB/T 22239-2019 8.1.4.2 访问控制
+  - https://attack.mitre.org/techniques/T1098/

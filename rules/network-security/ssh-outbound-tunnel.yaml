@@ -1,0 +1,26 @@
+id: rule.net.ssh-outbound-tunnel
+name: 异常出站 SSH 隧道
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: network-security
+tactics: ["TA0011 命令与控制"]
+techniques: ["T1572 协议隧道"]
+severity: high
+detection:
+  source: event.network.flow
+  window: 10m
+  group_by: ["src.asset_id"]
+  condition: "dst.port == 22 and network.direction == 'outbound' and count_distinct(dst.ip) >= 5"
+  except: "src.asset_id.labels.role in ('ops-jump','backup-worker')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+  escalate:
+    - when: "network.bytes >= 100000000"
+      do: ["isolate.host(src.asset_id)"]
+triage: >
+  主机对外批量 22 端口连接常为 SSH 隧道横跳或数据外带：核实目的 IP 归属
+  与业务必要性；大流量外联升级隔离，留存会话元数据取证。
+references:
+  - https://attack.mitre.org/techniques/T1572/

@@ -1,0 +1,23 @@
+id: rule.host.office-spawn-script
+name: Office 进程派生脚本执行（钓鱼载荷）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0001 初始访问", "TA0002 执行"]
+techniques: ["T1566.001 鱼叉附件"]
+severity: critical
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.parent_name matches '(?i)(winword|excel|powerpnt|outlook)' and process.name matches '(?i)(powershell|cmd|wscript|cscript|mshta)'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  Office 派生脚本进程是恶意文档载荷执行的标准特征（宏/OLE/漏洞利用）：
+  无条件隔离主机，保留 Office 子进程命令行取证，回溯邮件来源并全 organization
+  搜索同附件。
+references:
+  - https://attack.mitre.org/techniques/T1566/001/

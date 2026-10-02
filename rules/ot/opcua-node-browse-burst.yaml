@@ -1,0 +1,24 @@
+id: rule.ot.opcua-node-browse-burst
+name: OPC UA 节点枚举爆发
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0007 发现"]
+techniques: ["T1046 网络服务发现"]
+severity: medium
+detection:
+  source: adapter.generic.opcua-audit
+  window: 5m
+  group_by: ["src.asset_id"]
+  threshold: { browse_requests: 200 }
+  condition: "event.category == 'ics-command' and event.action == 'browse' and count() >= 200"
+  except: "src.asset_id.labels.role == 'scada-master'"
+response:
+  default: ["ticket.create", "notify.ot_duty"]
+triage: >
+  OPC UA Browse 枚举全节点树是侦察工控拓扑的标准前置动作：核对来源是否为
+  计划内组态工具；未知来源立即排查网络接入点并评估暴露的测点范围。
+references:
+  - https://attack.mitre.org/techniques/T1046/

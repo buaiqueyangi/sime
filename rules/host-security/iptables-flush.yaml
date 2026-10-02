@@ -1,0 +1,22 @@
+id: rule.host.iptables-flush
+name: 防火墙规则清空（iptables 停用）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.004 禁用或修改防火墙"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.command_line matches '(?i)(iptables\\s+(-F|--flush)|systemctl\\s+(stop|disable)\\s+(firewalld|ufw|nftables))'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  清空防火墙多为入侵后的防御卸载：核实操作会话与变更工单；非计划内立即
+  恢复规则基线并回溯执行上下文（ssh 会话/webshell/计划任务）。
+references:
+  - https://attack.mitre.org/techniques/T1562/004/

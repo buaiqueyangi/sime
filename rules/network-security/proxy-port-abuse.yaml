@@ -1,0 +1,23 @@
+id: rule.net.proxy-port-abuse
+name: 代理端口滥用（自建跳板）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: network-security
+tactics: ["TA0006 凭证访问", "TA0011 命令与控制"]
+techniques: ["T1090 使用代理"]
+severity: medium
+detection:
+  source: event.network.flow
+  window: 30m
+  group_by: ["src.asset_id"]
+  condition: "dst.port in (1080, 8080, 3128, 9050) and network.direction == 'outbound' and count_distinct(dst.ip) >= 8"
+  except: "src.asset_id.labels.role in ('proxy','scanner')"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+triage: >
+  主机批量连接外部代理端口（SOCKS/HTTP 代理）提示跳板或翻墙外带：
+  核对进程与目的信誉；确认非业务后阻断出站并排查主机。
+references:
+  - https://attack.mitre.org/techniques/T1090/

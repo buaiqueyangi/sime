@@ -1,0 +1,23 @@
+id: rule.web.ldap-injection
+name: LDAP 注入特征
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0001 初始访问"]
+techniques: ["T1190 利用面向公众的应用程序"]
+severity: high
+detection:
+  source: adapter.safeline.waf
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { attempts: 3 }
+  condition: "url.query matches '.*(\\|)\\((cn|uid|objectClass)=.*' or http.request.body.content matches '.*\\)\\((cn|uid)=.*\\(.*'"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create"]
+triage: >
+  LDAP 过滤器元字符注入可用于绕过认证或枚举目录：封禁源 IP 并通知研发
+  对目录查询参数做转义；核查域目录异常查询日志。
+references:
+  - https://attack.mitre.org/techniques/T1190/

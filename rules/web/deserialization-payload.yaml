@@ -1,0 +1,22 @@
+id: rule.web.deserialization-payload
+name: 反序列化攻击载荷
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0002 执行"]
+techniques: ["T1203 利用客户端执行漏洞"]
+severity: critical
+detection:
+  source: adapter.safeline.waf
+  window: 1m
+  group_by: ["src.ip"]
+  condition: "http.request.body.content matches '(?i)(rO0AB|\\xAC\\xED\\x00\\x05|ysoserial|CommonsCollections)' or url.query matches '(?i).*(ysoserial|CommonsCollections).*'"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  Java 反序列化魔数（rO0AB/ysoserial 特征）即为漏洞利用尝试：封禁并核查目标
+  组件版本（Commons-Collections/Weblogic/JBoss），确认易受影响版本立即升级。
+references:
+  - https://attack.mitre.org/techniques/T1203/

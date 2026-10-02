@@ -1,0 +1,22 @@
+id: rule.host.hosts-file-modify
+name: hosts 文件篡改（流量劫持）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避", "TA0011 命令与控制"]
+techniques: ["T1565.001 存储数据篡改"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "file.path matches '(?i).*(/etc/hosts|Windows/System32/drivers/etc/hosts)$' and event.action in ('modify','append')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.owner(dst.asset_id)", "notify.sec_team"]
+triage: >
+  hosts 篡改可将业务域名指向恶意 IP（劫持更新源/安全软件下载）：恢复文件并
+  核对新增解析指向；回溯写入进程，排查是否伴随软件供应链攻击。
+references:
+  - https://attack.mitre.org/techniques/T1565/001/

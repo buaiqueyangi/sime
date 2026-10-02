@@ -1,0 +1,26 @@
+id: rule.email.spf-fail-inbound
+name: 入站邮件 SPF 校验失败（伪造）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: email
+tactics: ["TA0001 初始访问"]
+techniques: ["T1534 内部钓鱼"]
+severity: low
+detection:
+  source: event.email.flow
+  window: 30m
+  group_by: ["src.ip"]
+  threshold: { spf_fail: 5 }
+  condition: "email.spf == 'fail' and email.direction == 'inbound' and count() >= 5"
+response:
+  default: ["notify.sec_team"]
+  escalate:
+    - when: "email.from.domain matches '.*company.*'"
+      do: ["ticket.create(sla=60m)"]
+triage: >
+  SPF 失败提示发件域伪造：若伪造的是我方域名（company 命中），说明有人
+  冒充公司发钓鱼——转 Brand 保护流程并 DMARC 加固（p=reject）。
+references:
+  - https://attack.mitre.org/techniques/T1534/

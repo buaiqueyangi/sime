@@ -1,0 +1,22 @@
+id: rule.ot.alarm-suppression
+name: 告警抑制/清零（安全系统篡改）
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0005 防御规避"]
+techniques: ["T0878 告警抑制"]
+severity: critical
+detection:
+  source: adapter.generic.opcua-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('alarm_suppress','alarm_clear_all','safety_bypass')"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty", "notify.sec_team"]
+triage: >
+  告警抑制是工控攻击隐蔽化的标志动作（先灭报警再操纵过程）：立即阻断并
+  双线通知。逐条核对被抑制的告警内容，评估过程安全风险（超温/超压等）。
+references:
+  - https://attack.mitre.org/techniques/T0878/

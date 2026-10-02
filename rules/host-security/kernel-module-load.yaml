@@ -1,0 +1,25 @@
+id: rule.host.kernel-module-load
+name: 内核模块加载（rootkit 载体）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持"]
+techniques: ["T1547.006 内核模块和扩展"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('kernel_module_load','insmod','modprobe_install') and process.name in ('insmod','modprobe')"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+  escalate:
+    - when: "module.name matches '(?i)(diamorphine|reptile|sutekh)' or file.path matches '/tmp/.*'"
+      do: ["isolate.host(dst.asset_id)"]
+triage: >
+  生产服务器极少需要加载新内核模块：非发布窗口的 insmod 按模块名与签名
+  核查；/tmp 路径或已知 rootkit 名命中立即隔离取证。
+references:
+  - https://attack.mitre.org/techniques/T1547/006/
