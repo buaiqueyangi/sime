@@ -1,0 +1,23 @@
+id: rule.host.linux-syscall-unshare
+name: unshare/namespace 逃逸尝试
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0004 权限提升"]
+techniques: ["T1611 转义到宿主机"]
+severity: critical
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.command_line matches '(?i)(unshare|nsenter|setns)' and dst.asset.labels.virtualization in ('docker','containerd','podman')"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  容器内进程调用 unshare/nsenter 尝试切换命名空间是容器逃逸的标准手法：
+  立即隔离宿主机（非容器）并审计该容器全部网络与文件行为；排查容器是否
+  以特权模式运行或挂载了宿主机敏感路径。
+references:
+  - https://attack.mitre.org/techniques/T1611/

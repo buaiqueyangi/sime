@@ -1,0 +1,22 @@
+id: rule.host.linux-auditd-syscall
+name: auditd 敏感系统调用审计
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.002 削弱主机日志"]
+severity: medium
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('auditd_stopped','audit_rule_deleted','audit_buffer_overflow')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  auditd 停止/规则删除/缓冲溢出丢弃事件（等保安全审计项）：核实是否为
+  运维变更；非计划内停止立即重启 auditd 并回溯该时段全部日志空洞。
+references:
+  - https://attack.mitre.org/techniques/T1562/002/

@@ -1,0 +1,24 @@
+id: rule.ot.opcua-session-encryption-downgrade
+name: OPC UA 会话加密降级
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0005 防御规避", "TA0006 凭证访问"]
+techniques: ["T1600.001 弱密钥"]
+severity: high
+detection:
+  source: adapter.generic.opcua-audit
+  window: 5m
+  group_by: ["dst.asset_id"]
+  threshold: { downgrade_sessions: 3 }
+  condition: "event.category == 'ics-command' and opcua.security_mode matches '(?i)(None|BestEffort)' and count() >= 3"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=15m)", "notify.ot_duty", "notify.sec_team"]
+triage: >
+  OPC UA 会话从 SignAndEncrypt 降级为 None/BestEffort 是中间人攻击的前置
+  条件：立即阻断降级会话并核查来源；检查服务器安全策略是否被篡改
+  （SecurityPolicy 配置回退），排查网络中是否存在 ARP 欺骗或 DNS 劫持。
+references:
+  - https://attack.mitre.org/techniques/T1600/001/

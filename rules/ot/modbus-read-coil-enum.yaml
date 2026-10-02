@@ -1,0 +1,25 @@
+id: rule.ot.modbus-read-coil-enum
+name: Modbus 读线圈/寄存器枚举
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0007 发现"]
+techniques: ["T1046 网络服务发现"]
+severity: medium
+detection:
+  source: adapter.generic.opcua-audit
+  window: 5m
+  group_by: ["src.asset_id"]
+  threshold: { read_fc: 100 }
+  condition: "event.category == 'ics-command' and modbus.function_code in ('01','02','03','04') and count() >= 100"
+  except: "src.asset_id.labels.role == 'scada-master'"
+response:
+  default: ["ticket.create", "notify.ot_duty"]
+triage: >
+  Modbus 读功能码（01/02/03/04）高频批量是 PLC 寄存器/线圈枚举（摸底
+  工控数据映射）：非 scada-master 白名单来源按未授权侦察处置；枚举结果
+  可用于后续精准写入攻击，需评估暴露面。
+references:
+  - https://attack.mitre.org/techniques/T1046/

@@ -1,0 +1,24 @@
+id: rule.ot.scada-unauthorized-laptop
+name: 未知笔记本接入 SCADA 网段
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0001 初始访问"]
+techniques: ["T1200 硬件植入"]
+severity: critical
+detection:
+  source: event.network.flow
+  window: 5m
+  group_by: ["src.ip"]
+  condition: "src.asset_id == null and network.direction == 'inbound' and dst.asset.labels.zone == 'scada' and count() >= 3"
+response:
+  default: ["switch.port_isolate(src.ip)", "ticket.create(sla=15m)", "notify.ot_duty", "notify.sec_team"]
+triage: >
+  未登记笔记本接入 SCADA 网段（等保边界防护最高优先级）：立即物理隔离
+  接入端口，现场核实设备归属与意图；同时检查该笔记本是否已建立与 PLC/
+  HMI 的通信（ARP/MQTT/Modbus 会话），确认无数据外泄后按制度处置。
+references:
+  - GB/T 22239-2019 8.1.3.2 边界防护
+  - https://attack.mitre.org/techniques/T1200/

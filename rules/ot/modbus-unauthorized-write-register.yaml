@@ -1,0 +1,22 @@
+id: rule.ot.modbus-unauthorized-write-register
+name: Modbus 非白名单写寄存器
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0110 ICS 操纵"]
+techniques: ["T0831 对过程参数的非法授权修改"]
+severity: critical
+detection:
+  source: adapter.generic.opcua-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and modbus.function_code in ('06','16') and src.asset.id not in dst.asset.security.command_allowlist"
+response:
+  default: ["plc.deny(dst.asset_id)", "isolate.host(src.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty", "notify.sec_team"]
+triage: >
+  写寄存器（功能码 06/16）来自白名单外来源：无条件阻断并冻结目标 PLC，
+  现场确认工艺参数是否被篡改。此为工控安全最高优先级——直接过程操纵。
+references:
+  - https://attack.mitre.org/techniques/T0831/

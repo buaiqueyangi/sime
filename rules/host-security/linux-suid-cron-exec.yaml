@@ -1,0 +1,23 @@
+id: rule.host.linux-suid-cron-exec
+name: cron 执行 SUID 二进制
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0004 权限提升", "TA0003 权限维持"]
+techniques: ["T1053.003 Cron", "T1548.001 Setuid"]
+severity: critical
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "sequence([file.path matches '(?i).*(cron|spool).*' and event.action in ('create','modify'), process.name matches '(?i)(sh|bash|python|perl)']) within 10m"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  cron 规则变更后紧接脚本执行是权限提升+持久化的组合链（Cronomatic 等
+  提权框架的标准流程）：隔离主机并提取 cron 内容与执行脚本做沙箱研判。
+references:
+  - https://attack.mitre.org/techniques/T1053/003/
+  - https://attack.mitre.org/techniques/T1548/001/

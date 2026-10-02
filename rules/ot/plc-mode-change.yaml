@@ -1,0 +1,24 @@
+id: rule.ot.plc-mode-change
+name: PLC 运行模式切换（RUN→PROG）
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 ICS 物理过程操纵", "TA0103 ICS 设备重启/关闭"]
+techniques: ["T0843 程序下载", "T0886 远程服务"]
+severity: critical
+detection:
+  source: adapter.generic.opcua-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and event.name in ('plc_mode_change','plc_stop','plc_run_change') and event.action in ('run_to_prog','stop_to_prog')"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  PLC 从 RUN 切换到 PROGRAM 模式意味着过程控制中断（停止生产/停止安全
+  功能）：无条件阻断并双线通知。非计划内的模式切换可能是勒索软件（停止
+  生产线要求赎金）或 APT 的最终破坏阶段。
+references:
+  - https://attack.mitre.org/techniques/T0843/
+  - https://attack.mitre.org/techniques/T0886/

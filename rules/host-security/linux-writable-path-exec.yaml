@@ -1,0 +1,23 @@
+id: rule.host.linux-writable-path-exec
+name: 可写路径执行可疑脚本
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0002 执行"]
+techniques: ["T1059.004 Unix Shell"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.command_line matches '(?i)^(/tmp|/dev/shm|/var/tmp|/run/user)' and process.name in ('sh','bash','python','python3','perl','nc','ncat')"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  从可写临时路径执行解释器/网络工具是非持久化攻击的典型行为（恶意脚本
+  不落盘直接执行）：隔离主机并提取命令行做沙箱分析；配合 /tmp 审计确认
+  落盘文件是否已删除（反取证迹象）。
+references:
+  - https://attack.mitre.org/techniques/T1059/004/
