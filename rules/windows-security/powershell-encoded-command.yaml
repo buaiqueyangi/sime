@@ -1,0 +1,26 @@
+id: rule.win.powershell-encoded-command
+name: PowerShell EncodedCommand 编码执行
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0002 执行", "TA0005 防御规避"]
+techniques: ["T1027 混淆编码文件或信息", "T1059.001 PowerShell"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.command_line matches '(?i)-enc(odedcommand)?\\s+[A-Za-z0-9+/=]{30,}'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+  escalate:
+    - when: "user.name != 'SYSTEM'"
+      do: ["isolate.host(dst.asset_id)"]
+triage: >
+  PowerShell -Enc/Base64 编码执行是免杀标配：解码命令行内容分析载荷意图；
+  非SYSTEM上下文的编码执行直接按失陷处置并隔离主机。
+references:
+  - https://attack.mitre.org/techniques/T1027/
+  - https://attack.mitre.org/techniques/T1059/001/

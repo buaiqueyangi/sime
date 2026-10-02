@@ -1,0 +1,22 @@
+id: rule.win.defender-rt-offline
+name: Defender 实时保护关闭事件
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.001 削弱防御工具"]
+severity: high
+detection:
+  source: adapter.generic.windows-event
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '5001' or event.name in ('defender_rt_off')"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  Windows Defender 实时保护关闭（EventID 5001）：核实是否为运维变更；
+  非计划内立即恢复实时保护并回溯该主机近期全部告警与文件事件。
+references:
+  - https://attack.mitre.org/techniques/T1562/001/

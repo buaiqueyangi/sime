@@ -1,0 +1,23 @@
+id: rule.win.remote-access-tool
+name: 远控工具接入（TeamViewer/AnyDesk/TightVNC）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0011 命令与控制"]
+techniques: ["T1219 远程访问软件"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "process.name matches '(?i)(teamviewer|anydesk|tightvnc|ultravnc|rustdesk|sunlogin|todesk)' and event.category == 'endpoint'"
+  except: "dst.asset.labels.role in ('remote-support')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  远控工具接入生产终端（非远程支持岗）提示未授权访问或社会工程安装：
+  核实连接会话与远端 IP；确认未授权立即终止进程并排查安装来源与时间。
+references:
+  - https://attack.mitre.org/techniques/T1219/

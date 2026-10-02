@@ -1,0 +1,22 @@
+id: rule.win.defender-scan-bypass
+name: Defender 扫描路径排除（检测绕过）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.001 削弱防御工具"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "process.command_line matches '(?i)Add-MpPreference.*(ExclusionProcess|ExclusionExtension)'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  排除进程/扩展名是给后续恶意载荷开通道：立即移除排除项并回溯排除范围内
+  的全部新文件；结合 HIDS 近期事件判断是否已有恶意文件利用排除位落盘。
+references:
+  - https://attack.mitre.org/techniques/T1562/001/

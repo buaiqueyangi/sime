@@ -1,0 +1,22 @@
+id: rule.win.registry-persistence-runonce
+name: RunOnce 注册表持久化
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持"]
+techniques: ["T1060 注册表运行键"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '13' and registry.path matches '(?i)RunOnce'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  RunOnce 与 Run 键同为经典持久化位置（区别是 RunOnce 下次登录执行一次后
+  删除）：提取写入的命令行与二进制哈希送情报比对；非计划内清理并溯源。
+references:
+  - https://attack.mitre.org/techniques/T1060/

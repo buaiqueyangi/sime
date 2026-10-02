@@ -1,0 +1,27 @@
+id: rule.win.usb-storage-write
+name: USB 存储设备文件写入
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0010 数据渗出"]
+techniques: ["T1052.001 通过可移动介质外带"]
+severity: medium
+detection:
+  source: adapter.generic.sysmon
+  window: 5m
+  group_by: ["dst.asset_id"]
+  threshold: { usb_writes: 10 }
+  condition: "event.code == '11' and file.path matches '(?i)^[E-H]\\\\' and count() >= 10"
+  except: "dst.asset.labels.role in ('backup-worker','kiosk')"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+  escalate:
+    - when: "file.name matches '(?i)\\.(doc|xls|pdf|mdb|dwg)'"
+      do: ["notify.sec_team"]
+triage: >
+  USB 写入敏感文件（文档/数据库/CAD 图纸）为数据外带：核实写入内容与
+  业务需求；生产网与研发网终端建议禁用 USB 存储策略。
+references:
+  - https://attack.mitre.org/techniques/T1052/001/

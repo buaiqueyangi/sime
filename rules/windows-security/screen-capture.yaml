@@ -1,0 +1,24 @@
+id: rule.win.screen-capture
+name: 屏幕截取行为
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0009 收集"]
+techniques: ["T1113 屏幕截取"]
+severity: medium
+detection:
+  source: adapter.generic.sysmon
+  window: 10m
+  group_by: ["dst.asset_id"]
+  threshold: { screen_captures: 20 }
+  condition: "event.name in ('screen_capture','screenshot_taken') and count() >= 20"
+  except: "process.name in ('explorer.exe','snippingtool.exe','Snipaste.exe')"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+triage: >
+  未知进程周期性截屏是远控/间谍软件的标准数据采集行为：核对截屏进程签名
+  与安装来源；确认恶意后终止并排查同主机其他信息收集行为。
+references:
+  - https://attack.mitre.org/techniques/T1113/

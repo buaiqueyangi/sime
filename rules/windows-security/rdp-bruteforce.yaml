@@ -1,0 +1,23 @@
+id: rule.win.rdp-bruteforce
+name: RDP 暴力破解（3389 端口）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1110 密码猜解"]
+severity: high
+detection:
+  source: event.network.flow
+  window: 5m
+  group_by: ["src.ip", "dst.asset_id"]
+  threshold: { rdp_attempts: 20 }
+  condition: "dst.port == 3389 and network.direction == 'inbound' and count() >= 20"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create"]
+triage: >
+  RDP 3389 端口高频连接为远程桌面爆破：封禁源 IP 并确认是否有成功登录
+  （结合 Windows 4624 事件）；建议生产环境启用 NLA 并限制 RDP 来源 IP。
+references:
+  - https://attack.mitre.org/techniques/T1110/

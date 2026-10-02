@@ -1,0 +1,22 @@
+id: rule.win.startup-folder-drop
+name: 启动文件夹文件落盘
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持"]
+techniques: ["T1547.001 注册表启动项"]
+severity: medium
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '11' and file.path matches '(?i)(Start Menu\\\\Programs\\\\Startup|スタートアップ)'"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+triage: >
+  启动文件夹是最低技术门槛的持久化位置（用户登录即执行）：核对落盘文件
+  是否为用户主动安装的软件；未知文件提取哈希送情报比对。
+references:
+  - https://attack.mitre.org/techniques/T1547/001/

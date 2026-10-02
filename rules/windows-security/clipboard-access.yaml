@@ -1,0 +1,24 @@
+id: rule.win.clipboard-access
+name: 剪贴板数据读取
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0009 收集"]
+techniques: ["T1115 剪贴板数据"]
+severity: medium
+detection:
+  source: adapter.generic.sysmon
+  window: 5m
+  group_by: ["dst.asset_id"]
+  threshold: { clipboard_reads: 10 }
+  condition: "event.name in ('clipboard_read','clipboard_monitor') and count() >= 10"
+  except: "process.name in ('explorer.exe','mspaint.exe','notepad.exe')"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+triage: >
+  剪贴板监控工具可截获复制的密码/钱包地址/敏感文本：核对监听进程是否为
+  用户主动安装的工具；未知进程按信息窃取处置并排查其安装来源。
+references:
+  - https://attack.mitre.org/techniques/T1115/

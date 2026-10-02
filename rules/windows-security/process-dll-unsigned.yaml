@@ -1,0 +1,22 @@
+id: rule.win.process-dll-unsigned
+name: 特权进程加载未签名 DLL
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1574.002 DLL 侧加载"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '7' and process.name matches '(?i)(svchost|lsass|spoolsv|services)\\.exe' and file.path matches '(?i)(temp|downloads|desktop|appdata)'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  系统特权进程从临时/下载目录加载 DLL 是侧加载攻击的精确特征（白利用）：
+  提取 DLL 哈希送情报比对；确认恶意后终止进程并清除落盘 DLL。
+references:
+  - https://attack.mitre.org/techniques/T1574/002/
