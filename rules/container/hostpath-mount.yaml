@@ -1,0 +1,25 @@
+id: rule.container.hostpath-mount
+name: 容器 hostPath 敏感路径挂载
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: container
+tactics: ["TA0004 权限提升", "TA0003 权限维持"]
+techniques: ["T1611 转义到宿主机"]
+severity: critical
+detection:
+  source: adapter.k8s.audit
+  window: 1m
+  group_by: ["user.name"]
+  condition: "event.category == 'k8s-audit' and pod.hostpath matches '(?i)(/etc|/var/run/docker\\.sock|/proc|/root|/\\.kube)'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+  escalate:
+    - when: "pod.hostpath matches '(?i)(docker\\.sock|/proc|/\\.kube)'"
+      do: ["notify.owner(dst.asset_id)"]
+triage: >
+  hostPath 挂载 /、/var/run/docker.sock、/proc 等于容器逃逸直通宿主机 root：
+  逐条核对部署清单；CI/CD 之外的敏感路径挂载立即驱逐并审查创建者凭证。
+references:
+  - https://attack.mitre.org/techniques/T1611/

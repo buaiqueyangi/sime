@@ -1,0 +1,23 @@
+id: rule.win.dns-query-covert
+name: Windows 可疑 DNS 查询（TXT/PTR 隐蔽通道）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0011 命令与控制"]
+techniques: ["T1071.004 DNS"]
+severity: medium
+detection:
+  source: adapter.generic.sysmon
+  window: 10m
+  group_by: ["dst.asset_id"]
+  threshold: { covert_dns: 20 }
+  condition: "event.code == '22' and dns.record_type in ('TXT','NULL') and count() >= 20"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+triage: >
+  Sysmon DNS 事件（EventID 22）中的 TXT/NULL 高频查询：结合目的域名信誉
+  判断是否为 DNS 隧道 C2；可疑域名在边界 DNS 服务器加入黑名单。
+references:
+  - https://attack.mitre.org/techniques/T1071/004/

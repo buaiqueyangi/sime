@@ -1,0 +1,22 @@
+id: rule.win.process-token-manipulation
+name: 进程令牌操纵（提权/模拟）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0004 权限提升", "TA0005 防御规避"]
+techniques: ["T1134 访问令牌操纵"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('token_manipulation','token_steal') or process.command_line matches '(?i)(incognito|tokenvator|GetSystem)'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  令牌操纵可将普通服务会话提升为 SYSTEM：核对进程签名与启动来源；
+  渗透测试白名单外一律按攻击处置，排查是否已从服务账户横向到域管。
+references:
+  - https://attack.mitre.org/techniques/T1134/

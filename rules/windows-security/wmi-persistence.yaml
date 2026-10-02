@@ -1,0 +1,23 @@
+id: rule.win.wmi-persistence
+name: WMI 事件订阅持久化
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 权限维持"]
+techniques: ["T1546.005 WMI 事件订阅"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code in ('19','20','21')"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  WMI 事件订阅是无文件持久化（不落盘、重启存活）：提取订阅的 WQL 与
+  消费者动作（CommandLineEventTemplate 尤其危险），溯源创建者并清理全部
+  __EventFilter/__CommandLineEventConsumer/__FilterToConsumerBinding 三件套。
+references:
+  - https://attack.mitre.org/techniques/T1546/005/

@@ -1,0 +1,24 @@
+id: rule.ot.iec104-telecontrol-counter
+name: IEC-104 遥控计数超限
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0110 ICS 操纵"]
+techniques: ["T0855 未授权指令消息"]
+severity: critical
+detection:
+  source: adapter.generic.opcua-audit
+  window: 10m
+  group_by: ["dst.asset_id"]
+  threshold: { telecontrol: 50 }
+  condition: "event.category == 'ics-command' and event.action in ('remote_control','set_point') and count() >= 50"
+response:
+  default: ["plc.deny(dst.asset_id)", "isolate.host(src.asset_id)", "notify.ot_duty", "notify.sec_team", "ticket.create(sla=5m)"]
+triage: >
+  IEC-104 遥控命令（C_SC/C_DC）10 分钟 50 次以上：无论来源是否在白名单，
+  该频率远超正常调度操作——冻结目标 RTU 并核对调度自动化系统日志，
+  排查是否经过 104 通道（port 2404）的中间人注入。
+references:
+  - https://attack.mitre.org/techniques/T0855/

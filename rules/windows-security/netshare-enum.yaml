@@ -1,0 +1,24 @@
+id: rule.win.netshare-enum
+name: 网络共享枚举
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0007 发现"]
+techniques: ["T1135 网络共享发现"]
+severity: medium
+detection:
+  source: adapter.generic.sysmon
+  window: 10m
+  group_by: ["src.asset_id"]
+  threshold: { share_enum: 10 }
+  condition: "event.code == '5140' or event.name in ('net_share_enum','netview') and count() >= 10"
+  except: "src.asset_id.labels.role in ('backup-worker','file-server')"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+triage: >
+  网络共享枚举是横向移动的侦察步骤：对比源主机角色基线；备份/文件服务器
+  白名单外按可疑处置，重点排查枚举量最大的源主机是否有凭证泄露迹象。
+references:
+  - https://attack.mitre.org/techniques/T1135/

@@ -1,0 +1,23 @@
+id: rule.container.resource-limit-stripped
+name: 容器资源限制被移除
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: container
+tactics: ["TA0006 凭证访问", "TA0040 影响"]
+techniques: ["T1496 资源劫持"]
+severity: medium
+detection:
+  source: adapter.k8s.audit
+  window: 5m
+  group_by: ["user.name"]
+  condition: "event.category == 'k8s-audit' and pod.resources.limits == null"
+  except: "user.name in ('system:kube-scheduler','system:kube-controller-manager')"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+triage: >
+  无资源限制的容器可被单点耗尽节点资源（DoS/挖矿掩护）：逐条核对部署
+  清单；生产 namespace 强制 LimitRange 准入策略补齐。
+references:
+  - https://attack.mitre.org/techniques/T1496/

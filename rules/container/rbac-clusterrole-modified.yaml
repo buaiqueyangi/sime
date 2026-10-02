@@ -1,0 +1,23 @@
+id: rule.container.rbac-clusterrole-modified
+name: ClusterRole 权限变更
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: container
+tactics: ["TA0003 权限维持", "TA0004 权限提升"]
+techniques: ["T1098 账户操作"]
+severity: high
+detection:
+  source: adapter.k8s.audit
+  window: 1m
+  group_by: ["user.name"]
+  condition: "event.category == 'k8s-audit' and object.type in ('clusterroles','clusterrolebindings') and verb in ('create','update','patch','delete')"
+response:
+  default: ["ticket.create(sla=60m)", "notify.sec_team"]
+triage: >
+  ClusterRole/Binding 变更直接改变集群权限基线（cluster-admin 授权是
+  K8s 最高风险动作）：逐条核对变更审批；非计划内立即回滚并审计操作者
+  后续行为（是否创建特权 Pod/读取 Secret）。
+references:
+  - https://attack.mitre.org/techniques/T1098/

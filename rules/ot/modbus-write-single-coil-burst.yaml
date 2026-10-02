@@ -1,0 +1,24 @@
+id: rule.ot.modbus-write-single-coil-burst
+name: Modbus 写单线圈命令突发
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0110 ICS 操纵"]
+techniques: ["T0831 对过程参数的非法授权修改"]
+severity: critical
+detection:
+  source: adapter.generic.opcua-audit
+  window: 1m
+  group_by: ["src.asset_id"]
+  threshold: { write_coil: 30 }
+  condition: "event.category == 'ics-command' and modbus.function_code in ('05','15') and count() >= 30"
+response:
+  default: ["plc.deny(dst.asset_id)", "isolate.host(src.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty"]
+triage: >
+  功能码 05/15（写单线圈/写多线圈）高频突发是直接操纵执行器（启停阀门/
+  断路器）的攻击行为：无条件阻断源并冻结目标控制器，现场确认工艺状态。
+  工控安全最高优先级规则之一。
+references:
+  - https://attack.mitre.org/techniques/T0831/

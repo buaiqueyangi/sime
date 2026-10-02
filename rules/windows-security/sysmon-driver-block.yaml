@@ -1,0 +1,22 @@
+id: rule.win.sysmon-driver-block
+name: Sysmon 驱动/服务异常卸载
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.001 削弱防御工具"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code in ('4','255') or event.name in ('sysmon_driver_unload')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  Sysmon 本身被卸载意味着攻击者在主动削弱终端可观测性：核实操作来源与
+  变更工单；非计划内立即重装 Sysmon 并回溯卸载前的完整行为链。
+references:
+  - https://attack.mitre.org/techniques/T1562/001/

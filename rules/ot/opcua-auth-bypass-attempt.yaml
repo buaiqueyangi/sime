@@ -1,0 +1,24 @@
+id: rule.ot.opcua-auth-bypass-attempt
+name: OPC UA 匿名/弱认证会话
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0006 凭证访问", "TA0110 ICS 操纵"]
+techniques: ["T0812 默认凭据"]
+severity: high
+detection:
+  source: adapter.generic.opcua-audit
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { anonymous_sessions: 3 }
+  condition: "event.category == 'ics-command' and opcua.security_mode in ('None','BestEffort') and count() >= 3"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=15m)", "notify.ot_duty"]
+triage: >
+  OPC UA 使用 None/BestEffort 安全模式建立会话（匿名接入工业协议）：
+  核实来源与业务；工控协议安全模式应强制为 SignAndEncrypt——
+  此规则同时可用于持续审计协议安全模式基线。
+references:
+  - https://attack.mitre.org/techniques/T0812/
