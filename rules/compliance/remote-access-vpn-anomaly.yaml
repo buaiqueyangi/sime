@@ -1,0 +1,23 @@
+id: rule.cp.remote-access-vpn-anomaly
+name: VPN 接入异常时段（等保-远程管理）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0001 初始访问"]
+techniques: ["T1078 有效账户"]
+severity: medium
+detection:
+  source: event.security.auth
+  window: 1m
+  group_by: ["src.user.id"]
+  condition: "event.name == 'vpn_login' and not time.in_shift(src.user.labels.shift)"
+response:
+  default: ["ticket.create", "notify.sec_team", "notify.owner(src.user.id)"]
+triage: >
+  等保远程管理项：VPN 接入应在审批时段内（值班/变更窗口）。
+  非时段 VPN 登录先确认本人身份；连续异常可触发双因子重新验证。
+references:
+  - GB/T 22239-2019 8.1.4.2 远程管理
+  - https://attack.mitre.org/techniques/T1078/

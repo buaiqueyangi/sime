@@ -1,0 +1,24 @@
+id: rule.ot.iec104-init-flood
+name: IEC-104 STARTDT 洪泛（链路层DoS）
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0040 影响"]
+techniques: ["T0814 拒绝服务"]
+severity: high
+detection:
+  source: adapter.generic.opcua-audit
+  window: 5m
+  group_by: ["src.asset_id"]
+  threshold: { startdt_act: 30 }
+  condition: "event.category == 'ics-command' and event.name == 'STARTDT_ACT' and count() >= 30"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=15m)", "notify.ot_duty"]
+triage: >
+  IEC-104 STARTDT_ACT（链路启动确认帧 APDU type 107）高频重复是链路层
+  DoS（反复断开重连导致 RTU 无法服务合法主站）：核实源是否为新增调度
+  主站；非计划内立即阻断并抓包分析帧内容。
+references:
+  - https://attack.mitre.org/techniques/T0814/

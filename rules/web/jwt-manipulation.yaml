@@ -1,0 +1,23 @@
+id: rule.web.jwt-manipulation
+name: JWT 令牌操纵
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0006 凭证访问", "TA0004 权限提升"]
+techniques: ["T1552.001 非安全存储的凭证"]
+severity: high
+detection:
+  source: adapter.generic.nginx-access
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { jwt_fails: 10 }
+  condition: "url.path matches '(?i)(/api|/auth)' and http.response.status_code in ('401','403') and http.request.headers matches '(?i)Bearer eyJ' and count() >= 10"
+response:
+  default: ["firewall.block(src.ip, ttl=12h)", "ticket.create"]
+triage: >
+  高频 JWT 401 是令牌伪造/算法混淆攻击（alg:none/RS256→HS256）的尝试
+  特征：封禁源 IP 并核查 JWT 库是否受 CVE-2015-9235/CVE-2016-10555 影响。
+references:
+  - https://attack.mitre.org/techniques/T1552/001/

@@ -1,0 +1,23 @@
+id: rule.web.open-redirect
+name: 开放重定向探测
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0001 初始访问"]
+techniques: ["T1566.002 鱼叉式钓鱼链接"]
+severity: medium
+detection:
+  source: adapter.generic.nginx-access
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { redirect_probes: 5 }
+  condition: "url.query matches '(?i)(redirect|return|next|url|goto)=(https?://|//)[^&]*' and count() >= 5"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+triage: >
+  开放重定向可被用于钓鱼链接跳转（利用可信域名做中转）：通知研发对
+  redirect 参数做白名单域名校验；确认被利用后评估钓鱼邮件传播范围。
+references:
+  - https://attack.mitre.org/techniques/T1566/002/

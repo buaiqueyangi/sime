@@ -1,0 +1,23 @@
+id: rule.web.graphql-introspection
+name: GraphQL Introspection 探测
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0007 发现"]
+techniques: ["T1592.003 收集网络拓扑"]
+severity: medium
+detection:
+  source: adapter.safeline.waf
+  window: 5m
+  group_by: ["src.ip"]
+  condition: "http.request.body.content matches '(?i)(__schema|__type|__introspection)' or url.query matches '(?i)(graphql|__schema)'"
+response:
+  default: ["ticket.create", "notify.sec_team"]
+triage: >
+  GraphQL Introspection 查询可完整枚举 API Schema（字段/类型/关系），
+  为后续 API 滥用提供地图：通知研发在 production 关闭 introspection，
+  并核查是否有通过该接口的数据泄露。
+references:
+  - https://attack.mitre.org/techniques/T1592/003/

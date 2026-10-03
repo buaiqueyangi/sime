@@ -1,0 +1,23 @@
+id: rule.ot.opcua-certificate-anomaly
+name: OPC UA 证书异常（过期/自签名/不匹配）
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0006 凭证访问"]
+techniques: ["T0812 默认凭据"]
+severity: high
+detection:
+  source: adapter.generic.opcua-audit
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and event.name in ('cert_expired','cert_selfsigned','cert_hostname_mismatch','cert_trust_fail')"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=15m)", "notify.ot_duty", "notify.sec_team"]
+triage: >
+  OPC UA 证书异常（过期/自签名/主机名不匹配/信任链失败）提示客户端身份
+  不可验证或中间人攻击：核实证书指纹与签发者；自签名证书可能是攻击者
+  自建 CA 签发的恶意证书——立即阻断并检查服务器证书信任列表。
+references:
+  - https://attack.mitre.org/techniques/T0812/

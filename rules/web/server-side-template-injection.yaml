@@ -1,0 +1,25 @@
+id: rule.web.server-side-template-injection
+name: 服务端模板注入（SSTI）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0002 执行"]
+techniques: ["T1059 远程命令执行"]
+severity: critical
+detection:
+  source: adapter.safeline.waf
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { ssti_probes: 3 }
+  condition: "url.query matches '(?i).*(\\{\\{.*\\}\\}|\\{%.*%\\}|\\$\\{.*\\}).*' and count() >= 3"
+  except: "url.path matches '(?i)^(/api/templates|/ui)'"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  SSTI（Jinja2/Freemarker/Velocity/Thymeleaf）可直接执行服务端代码（RCE）：
+  封禁源 IP；根据回显特征确定模板引擎类型，通知研发对模板变量做白名单
+  沙箱，禁用 __class__/__subclasses__ 等 Python 魔法方法链。
+references:
+  - https://attack.mitre.org/techniques/T1059/
