@@ -1,0 +1,23 @@
+id: rule.web.clickjacking-missing-header
+name: X-Frame-Options 缺失（点击劫持）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0001 初始访问"]
+techniques: ["T1189 通过浏览器劫持浏览"]
+severity: low
+detection:
+  source: adapter.generic.nginx-access
+  window: 30m
+  group_by: ["dst.asset_id"]
+  condition: "url.path matches '(?i)^/(login|admin|dashboard|console)' and http.response.status_code == '200' and http.response.headers matches '(?i)^(?!.*X-Frame-Options.*)(?!.*Content-Security-Policy.*frame-ancestors.*)'"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+triage: >
+  登录/管理页面未设置 X-Frame-Options 或 CSP frame-ancestors 可被
+  iframe 嵌套做点击劫持（诱导用户在不可见层点击敏感按钮）：通知研发
+  添加 HTTP 安全头（X-Frame-Options: DENY 或 CSP frame-ancestors 'none'）。
+references:
+  - https://attack.mitre.org/techniques/T1189/

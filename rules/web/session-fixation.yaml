@@ -1,0 +1,23 @@
+id: rule.web.session-fixation
+name: 会话固定攻击（登录前后 SessionID 一致）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1550.004 Web 会话 Cookie"]
+severity: high
+detection:
+  source: adapter.generic.nginx-access
+  window: 30m
+  group_by: ["src.ip", "dst.asset_id"]
+  condition: "event.outcome == 'success' and url.path matches '(?i)(login|signin)' and http.request.headers matches '(?i)sessionid' and count() >= 1"
+response:
+  default: ["ticket.create(sla=60m)", "notify.owner(dst.asset_id)"]
+triage: >
+  登录前后 SessionID 未刷新可被攻击者预置会话 ID（用户登录后继承攻击者
+  会话）：通知研发在登录成功后调用 session.regenerate()；同时核查是否有
+  已知会话劫持事件（同一 SessionID 来自不同 IP）。
+references:
+  - https://attack.mitre.org/techniques/T1550/004/

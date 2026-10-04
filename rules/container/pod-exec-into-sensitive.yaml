@@ -1,0 +1,24 @@
+id: rule.container.pod-exec-into-sensitive
+name: kubectl exec 进入敏感 Pod
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: container
+tactics: ["TA0002 执行", "TA0008 横向移动"]
+techniques: ["T1609 容器管理命令"]
+severity: high
+detection:
+  source: adapter.k8s.audit
+  window: 5m
+  group_by: ["user.name"]
+  condition: "event.category == 'k8s-audit' and verb == 'create' and object.type == 'pods/exec' and object.namespace matches '(?i)(prod|payment|database|core)'"
+  except: "user.name matches '(?i)(sre|deploy|ci-cd)'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  kubectl exec 进入生产/支付/数据库 namespace 的 Pod 是内网横向的关键
+  跳板：核对操作者身份与工单；SRE/CI-CD 白名单外的 exec 操作按可疑
+  处置，重点排查 exec 后是否执行了 curl/nc/base64 解码/读 Secret。
+references:
+  - https://attack.mitre.org/techniques/T1609/

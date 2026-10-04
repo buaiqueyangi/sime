@@ -1,0 +1,24 @@
+id: rule.web.mimetypes-mismatch
+name: Content-Type 与实际内容不匹配
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0001 初始访问"]
+techniques: ["T1190 利用面向公众的应用程序"]
+severity: medium
+detection:
+  source: adapter.generic.nginx-access
+  window: 10m
+  group_by: ["dst.asset_id"]
+  condition: "http.response.status_code == '200' and file.name matches '(?i)\\.(jpg|png|gif|css|js)$' and http.request.method == 'POST' and count() >= 5"
+  except: "url.path matches '(?i)^/api/upload'"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+triage: >
+  对静态资源路径的 POST 请求（Content-Type 与扩展名不匹配）可能是
+  绕过 WAF 的上传/写入尝试：核查目标路径是否有写入接口，通知研发
+  对静态资源路径禁用 POST 方法。
+references:
+  - https://attack.mitre.org/techniques/T1190/

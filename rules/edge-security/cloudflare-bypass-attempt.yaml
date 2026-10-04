@@ -1,0 +1,25 @@
+id: rule.web.cloudflare-bypass-attempt
+name: WAF/CDN 绕过尝试（直连源站 IP）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: edge-security
+tactics: ["TA0007 发现"]
+techniques: ["T1590.005 收集 IP 地址"]
+severity: medium
+detection:
+  source: event.network.flow
+  window: 30m
+  group_by: ["src.ip"]
+  threshold: { direct_probes: 10 }
+  condition: "dst.port in (80,443) and dst.ip matches '^10\\.' and src.geo.country != 'CN' and count() >= 10"
+  except: "src.ip in ('10.0.0.0/8','172.16.0.0/12')"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "notify.net_admin"]
+triage: >
+  外部 IP 直接连源站（绕过 CDN/WAF 层）是对抗安全设备的标准侦察手法：
+  先确认源站 IP 是否泄露（DNS 历史/证书透明度日志/邮件头）；
+  封禁直连 IP 并强制所有流量走 CDN/WAF（源站仅允许 CDN 回源 IP 段）。
+references:
+  - https://attack.mitre.org/techniques/T1590/005/

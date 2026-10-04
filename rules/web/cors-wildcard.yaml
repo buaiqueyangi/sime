@@ -1,0 +1,23 @@
+id: rule.web.cors-wildcard
+name: CORS 通配符配 exposing 敏感数据
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0009 收集"]
+techniques: ["T1530 在数据传输期间收集数据"]
+severity: medium
+detection:
+  source: adapter.generic.nginx-access
+  window: 30m
+  group_by: ["dst.asset_id"]
+  condition: "url.path matches '(?i)^/api/' and http.response.status_code == '200' and http.response.headers matches '(?i)Access-Control-Allow-Origin.*\\*'"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+triage: >
+  API 响应头 Access-Control-Allow-Origin: * 允许任意域跨域读取（结合
+  withCredentials 可窃取认证数据）：通知研发改用白名单域名替代通配符；
+  重点排查是否暴露用户信息/凭证类接口。
+references:
+  - https://attack.mitre.org/techniques/T1530/

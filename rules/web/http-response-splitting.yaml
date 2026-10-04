@@ -1,0 +1,22 @@
+id: rule.web.http-response-splitting
+name: HTTP 响应拆分（CRLF 注入）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0001 初始访问"]
+techniques: ["T1190 利用面向公众的应用程序"]
+severity: high
+detection:
+  source: adapter.safeline.waf
+  window: 5m
+  group_by: ["src.ip"]
+  condition: "url.query matches '(%0d%0a|%0a%0d|\\r\\n)' and count() >= 2"
+response:
+  default: ["firewall.block(src.ip, ttl=24h)", "ticket.create"]
+triage: >
+  CRLF 注入可拆分 HTTP 响应头（注入 Set-Cookie 或伪造响应体）：
+  封禁源 IP 并通知研发对所有用户可控的头参数做 CRLF 编码过滤。
+references:
+  - https://attack.mitre.org/techniques/T1190/

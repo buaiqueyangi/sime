@@ -1,0 +1,27 @@
+id: rule.container.k8s-node-compromise
+name: K8s 节点级操作（Node proxy/exec）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: container
+tactics: ["TA0008 横向移动"]
+techniques: ["T1610 部署容器"]
+severity: critical
+detection:
+  source: adapter.k8s.audit
+  window: 5m
+  group_by: ["user.name"]
+  condition: "event.category == 'k8s-audit' and (object.type in ('nodes/proxy','nodes/status') or verb in ('proxy') and object.type matches 'nodes')"
+  except: "user.name matches '(?i)(system:kube|system:node)'"
+response:
+  default: ["ticket.create(sla=5m)", "notify.sec_team"]
+  escalate:
+    - when: "user.name != 'kubernetes-admin'"
+      do: ["isolate.host(src.asset_id)"]
+triage: >
+  K8s Node proxy/exec 允许通过 API Server 直接操作节点 kubelet（绕过
+  SSH 审计）：排查是否已通过节点代理访问元数据服务或宿主机文件系统；
+  非系统账号执行节点级操作按集群入侵处置。
+references:
+  - https://attack.mitre.org/techniques/T1610/

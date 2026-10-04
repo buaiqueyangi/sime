@@ -1,0 +1,26 @@
+id: rule.edge.geo-anomaly-burst
+name: 地理位置异常流量突发
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: edge-security
+tactics: ["TA0007 发现"]
+techniques: ["T1595.002 漏洞扫描"]
+severity: medium
+detection:
+  source: adapter.safeline.waf
+  window: 30m
+  group_by: ["src.geo.country"]
+  condition: "count_distinct(src.ip) >= 20 and count() >= 100 and src.geo.country != 'CN'"
+response:
+  default: ["notify.sec_team"]
+  escalate:
+    - when: "count() >= 500"
+      do: ["firewall.block(src.geo.country, ttl=24h)"]
+triage: >
+  单一境外国家/地区 IP 数量与请求量突发增长可能是分布式扫描或 APT 前置
+  侦察：分析目标资产分布与攻击载荷特征；确认非业务（无海外分支）后
+  按国家级别封禁。
+references:
+  - https://attack.mitre.org/techniques/T1595/002/
