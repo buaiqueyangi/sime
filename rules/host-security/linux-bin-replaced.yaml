@@ -1,0 +1,23 @@
+id: rule.host.linux-linux-bin-replaced
+name: 系统二进制文件被替换（ps/ls/netstat 等）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1036.005 修改系统二进制"]
+severity: critical
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('system_binary_replaced','binary_hash_changed') and file.path matches '(?i)^/(bin|sbin|usr/bin|usr/sbin)/(ps|ls|netstat|ss|top|find|grep|md5sum)$'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  系统命令（ps/ls/netstat）被替换是内核态 rootkit 的标准配置（隐藏进程/
+  网络/文件）：从平台侧留痕比对哈希确认替换范围；从干净介质启动取证，
+  不可在线清理（在线清理工具本身可能已被替换）。
+references:
+  - https://attack.mitre.org/techniques/T1036/005/

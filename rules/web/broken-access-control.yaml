@@ -1,0 +1,25 @@
+id: rule.web.broken-access-control
+name: 越权访问（IDOR/垂直越权）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1068 利用权限提升漏洞"]
+severity: high
+detection:
+  source: adapter.generic.nginx-access
+  window: 10m
+  group_by: ["user.name"]
+  threshold: { cross_tenant: 5 }
+  condition: "url.path matches '(?i)^/api/' and http.response.status_code == '200' and count_distinct(url.path) >= 5 and user.labels.role matches '(?i)(viewer|read-only|guest)'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team", "notify.owner(src.user.id)"]
+triage: >
+  低权限角色批量访问高权限 API（垂直越权）或跨租户读取（水平越权/IDOR）：
+  通知研发核查对应 API 的鉴权中间件；确认越权后立即修复并评估已泄露
+  数据范围。
+references:
+  - https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+  - https://attack.mitre.org/techniques/T1068/

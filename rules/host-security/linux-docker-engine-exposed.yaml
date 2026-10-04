@@ -1,0 +1,23 @@
+id: rule.host.linux-docker-engine-exposed
+name: Docker Engine API 暴露（2375端口）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0008 横向移动"]
+techniques: ["T1588.006 获取能力：容器"]
+severity: critical
+detection:
+  source: event.network.flow
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "dst.port == 2375 and network.direction == 'inbound'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  Docker Remote API (2375端口) 无认证暴露 = 等于宿主机 root 接入（可创建
+  挂载 / 的特权容器）：立即封禁端口并检查是否有已创建的恶意容器（结合
+  docker ps --all 回溯）；确认利用后按容器逃逸全流程处置。
+references:
+  - https://attack.mitre.org/techniques/T1588/006/

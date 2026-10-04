@@ -1,0 +1,23 @@
+id: rule.host.linux-selinux-disabled
+name: SELinux/AppArmor 被禁用
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.001 削弱防御工具"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.command_line matches '(?i)(setenforce\\s+0|setenforce\\s+permissive)' or file.path matches '(?i)/etc/selinux/config' and event.action in ('modify','write')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team", "notify.owner(dst.asset_id)"]
+triage: >
+  SELinux/AppArmor 是 Linux 强制访问控制的最后防线：非发布窗口的禁用
+  按入侵防御卸载处置；恢复 enforcing 模式并回溯禁用时段内全部行为
+  （该时段内不受 MAC 约束的操作可能已被利用）。
+references:
+  - https://attack.mitre.org/techniques/T1562/001/

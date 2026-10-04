@@ -1,0 +1,23 @@
+id: rule.web.api-schema-abuse
+name: API Schema 滥用（未文档化端点探测）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0007 发现"]
+techniques: ["T1592.004 收集客户端配置"]
+severity: medium
+detection:
+  source: adapter.generic.nginx-access
+  window: 10m
+  group_by: ["src.ip"]
+  threshold: { undocumented_endpoints: 15 }
+  condition: "url.path matches '(?i)^/api/' and http.response.status_code == '404' and count() >= 15"
+response:
+  default: ["firewall.block(src.ip, ttl=12h)", "ticket.create"]
+triage: >
+  对 API 路径的 404 高频探测是对未文档化端点的穷举（swagger泄露/API
+  字典攻击）：封禁源 IP 并审查是否有未文档化的管理端点暴露在外网。
+references:
+  - https://attack.mitre.org/techniques/T1592/004/

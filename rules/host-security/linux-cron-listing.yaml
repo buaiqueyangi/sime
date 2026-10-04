@@ -1,0 +1,28 @@
+id: rule.host.linux-cron-listing
+name: 定时任务枚举（crontab -l 批量）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0007 发现"]
+techniques: ["T1053.003 Cron"]
+severity: low
+detection:
+  source: event.security.hids
+  window: 10m
+  group_by: ["src.asset_id"]
+  threshold: { cron_lists: 8 }
+  condition: "process.command_line matches '(?i)(crontab\\s+-l|cat.*cron|ls.*cron)' and count() >= 8"
+  except: "user.name matches '(?i)^(root|deploy|ansible)$'"
+response:
+  default: ["notify.sec_team"]
+  escalate:
+    - when: "count() >= 30"
+      do: ["ticket.create(sla=60m)"]
+triage: >
+  非运维账号批量查看定时任务是侦察持久化机会的信号（找已存在的定时任务
+  劫持位）：低危先观察画像；高频率或来自非运维主机时结合登录事件判定
+  横向移动意图。
+references:
+  - https://attack.mitre.org/techniques/T1053/003/

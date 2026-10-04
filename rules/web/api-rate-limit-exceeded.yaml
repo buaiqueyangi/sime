@@ -1,0 +1,25 @@
+id: rule.web.api-rate-limit-exceeded
+name: API 速率异常（限流绕过探测）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: web
+tactics: ["TA0007 发现"]
+techniques: ["T1595.002 漏洞扫描"]
+severity: medium
+detection:
+  source: adapter.generic.nginx-access
+  window: 5m
+  group_by: ["src.ip"]
+  threshold: { api_calls: 500 }
+  condition: "url.path matches '(?i)^/api/' and count() >= 500"
+  except: "src.asset_id.labels.role in ('monitoring','ci-cd')"
+response:
+  default: ["firewall.block(src.ip, ttl=12h)", "ticket.create"]
+triage: >
+  API 接口 5 分钟 500+ 次调用远超正常用户行为（限流绕过/API 滥用/数据
+  爬取）：分析调用的 API 路径分布判断枚举目标；确认非业务后封禁并
+  评估已泄露数据范围。
+references:
+  - https://attack.mitre.org/techniques/T1595/002/

@@ -1,0 +1,22 @@
+id: rule.host.linux-shell-history-disable
+name: Shell 历史记录禁用
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.003 阻断命令历史"]
+severity: medium
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.command_line matches '(?i)(unset\\s+HISTFILE|HISTFILE=/dev/null|HISTSIZE=0|setopt.*history)'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  命令历史禁用是操作者不留痕迹的反取证行为：核实执行上下文（哪个会话、
+  哪个账号）；回溯禁用前后的命令，配合平台侧审计补齐盲区。
+references:
+  - https://attack.mitre.org/techniques/T1562/003/

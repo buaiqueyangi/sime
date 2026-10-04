@@ -1,0 +1,26 @@
+id: rule.host.linux-package-install-unexpected
+name: 非计划内软件包安装
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0002 执行"]
+techniques: ["T1072 软件部署工具"]
+severity: medium
+detection:
+  source: event.security.hids
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "process.name in ('apt','apt-get','dpkg','yum','rpm','dnf','pip','pip3','npm') and process.command_line matches '(?i)(install|add)'"
+  except: "process.command_line matches '(?i)(python3-pip|python3-setuptools)' and user.name in ('root','deploy','ci-runner')"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+  escalate:
+    - when: "process.command_line matches '(?i)(nc|netcat|nmap|masscan|sqlmap|metasploit|hydra|john|hashcat)'"
+      do: ["isolate.host(dst.asset_id)", "notify.sec_team"]
+triage: >
+  生产服务器非变更窗口安装软件包：核对安装清单与变更工单；安装安全工具
+  （nmap/hashcat 等）按攻击准备处置并隔离；常规包确认后补录基线。
+references:
+  - https://attack.mitre.org/techniques/T1072/

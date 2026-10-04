@@ -1,0 +1,25 @@
+id: rule.ot.opcua-historical-read-burst
+name: OPC UA 历史数据批量读取（HA 服务）
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0009 收集"]
+techniques: ["T0843 过程数据收集"]
+severity: high
+detection:
+  source: adapter.generic.opcua-audit
+  window: 10m
+  group_by: ["src.asset_id"]
+  threshold: { historical_reads: 50 }
+  condition: "event.category == 'ics-command' and event.action == 'historical_read' and count() >= 50"
+  except: "src.asset_id.labels.role == 'historian'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.ot_duty", "notify.sec_team"]
+triage: >
+  OPC UA Historical Access (HA) 批量读取可获取生产历史工艺数据（温度/压力/
+  配方/批次记录）——属于工艺数据外带：非 historian 白名单来源按数据窃取
+  处置，评估已泄露数据的商业价值与敏感性。
+references:
+  - https://attack.mitre.org/techniques/T0843/

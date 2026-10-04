@@ -1,0 +1,26 @@
+id: rule.host.linux-network-sniffer-start
+name: 网络嗅探工具启动（tcpdump/wireshark）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0006 凭证访问", "TA0009 收集"]
+techniques: ["T1040 网络嗅探"]
+severity: medium
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "process.name in ('tcpdump','tshark','dumpcap','wireshark')"
+  except: "user.name matches '(?i)^(root|netops|monitor)$' and process.command_line matches '(?i)(-i (eth0|ens|bond)|-i any)'"
+response:
+  default: ["ticket.create", "notify.owner(dst.asset_id)"]
+  escalate:
+    - when: "user.name != 'root' and process.command_line matches '(?i)-w'"
+      do: ["notify.sec_team"]
+triage: >
+  非授权网络嗅探可截获明文凭据（HTTP/Telnet/LDAP）与内部流量模式：
+  核实抓包目的（排障/安全测试）；非运维人员在生产服务器抓包按制度处置。
+references:
+  - https://attack.mitre.org/techniques/T1040/
