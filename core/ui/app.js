@@ -1336,3 +1336,36 @@ async function sendChat() {
 }
 $('chatSend').onclick = sendChat;
 $('chatText').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
+
+/* ===== 日志解析工作台（自动识别） ===== */
+const PARSE_SAMPLE = 'time=2025-04-27 10:23:01 src_ip=203.0.113.7 src_port=52110 dst_ip=10.2.85.118 dst_port=8080 rule_id=1000002 threat=SQL注入攻击 level=高危 action=阻断\n2025/04/27 10:23:02 src_ip=198.51.100.23 src_port=55110 dst_ip=10.2.85.119 dst_port=443 rule_id=3000001 attack_type=SQL注入攻击 risk=高 action=阻断\nApr 27 10:23:03 web-prd-02 sshd[18342]: Failed password for invalid user oracle from 203.0.113.99 port 41022 ssh2';
+
+$('parseSample').onclick = () => { $('parseInput').value = PARSE_SAMPLE; };
+$('parseBtn').onclick = async () => {
+  const raw = $('parseInput').value.trim();
+  const box = $('parseResult');
+  if (!raw) { box.innerHTML = '<p class="note" style="color:var(--crit);padding:8px 4px">请先粘贴日志</p>'; return; }
+  box.innerHTML = '<p class="dim" style="padding:8px 4px">识别中…</p>';
+  try {
+    const r = await jget('/api/v1/adapters/detect', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw }),
+    });
+    if (!r.matches.length) {
+      box.innerHTML = '<p class="note" style="padding:8px 4px">30 个适配器均未命中——该格式尚未支持。可将日志与格式说明提交到 adapters/ 目录贡献新适配器。</p>';
+      return;
+    }
+    box.innerHTML = `<p class="note" style="margin:0 0 8px">命中 ${r.matched} / ${r.total} 个适配器（按字段命中数排序，最优匹配高亮）</p>` +
+      r.matches.map((m, i) => `<div class="parse-hit${i === 0 ? ' best' : ''}">
+        <div class="ph-head">
+          <span class="ph-name">${esc(m.vendor)} · ${esc(m.product)}</span>
+          <span class="tag it">${esc(m.protocol)}</span>
+          <span class="dim mono" style="font-size:11px">${esc(m.id)}</span>
+          <span class="dim" style="margin-left:auto">${m.fieldCount} 字段</span>
+        </div>
+        <div class="parse-fields">${Object.entries(m.mapped).map(([k, v]) => `<div><b>${esc(k)}</b> = ${esc(String(v).slice(0, 60))}</div>`).join('')}</div>
+      </div>`).join('');
+  } catch (e) {
+    box.innerHTML = `<p class="note" style="color:var(--crit);padding:8px 4px">${esc(e.message)}</p>`;
+  }
+};

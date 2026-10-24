@@ -215,6 +215,22 @@
 
       <!-- 适配与物模型 -->
       <section id="view-catalog" class="view">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>日志解析工作台</h2>
+            <span class="note">粘贴任意原始日志 → 自动遍历 30 个适配器识别 → 输出 ECS 标准字段（支持多行，最多 20 行）</span>
+          </div>
+          <div class="parse-grid">
+            <div>
+              <textarea id="parseInput" class="sqlbox" style="min-height:150px" placeholder="贴入原始日志行，例如：&#10;time=2025-04-27 10:23:01 src_ip=203.0.113.7 ... 阻断&#10;或 Nginx/Apache/Sysmon/天擎/深信服 等任意格式"></textarea>
+              <div style="margin-top:8px;display:flex;gap:8px">
+                <button id="parseBtn" class="btn primary">识别解析</button>
+                <button id="parseSample" class="btn ghost">填入示例</button>
+              </div>
+            </div>
+            <div id="parseResult" class="parse-result"><p class="dim" style="padding:8px 4px">解析结果将显示在这里</p></div>
+          </div>
+        </div>
         <div class="cols">
           <div class="panel">
             <div class="panel-head"><h2>日志源适配库</h2></div>

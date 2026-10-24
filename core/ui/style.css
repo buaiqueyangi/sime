@@ -216,3 +216,15 @@ tr.alert-row:hover td { background: rgba(79, 140, 255, .06); }
 .ql-details summary { cursor: pointer; color: var(--dim); }
 .ql-details pre { background: #0a1220; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-family: Consolas, monospace; font-size: 11.5px; color: #9fc1ff; white-space: pre-wrap; word-break: break-all; margin: 8px 0 0; }
 .ql-table-wrap { max-height: 52vh; overflow: auto; }
+
+/* ===== 日志解析工作台 ===== */
+.parse-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 14px; }
+@media (max-width: 1000px) { .parse-grid { grid-template-columns: 1fr; } }
+.parse-result { background: #0d1526; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-height: 150px; max-height: 320px; overflow-y: auto; font-size: 12.5px; }
+.parse-hit { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+.parse-hit.best { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(79,140,255,.25); }
+.parse-hit .ph-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.parse-hit .ph-name { font-weight: 600; font-size: 12.5px; }
+.parse-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 3px 12px; }
+.parse-fields div { font-family: Consolas, monospace; font-size: 11.5px; color: #9fc1ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parse-fields b { color: var(--dim); font-weight: 400; }
