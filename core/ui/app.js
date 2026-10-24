@@ -480,7 +480,7 @@ async function refreshResponses() {
           <td><span class="tag ${p.source === 'custom' ? 'merged' : 'info'}">${esc(p.source)}</span>${p.status === 'disabled' ? ' <span class="tag critical">禁用</span>' : ''}</td>
           <td>
             <button class="mini" data-pact="toggle" data-pid="${esc(p.id)}" data-st="${p.status === 'disabled' ? 'stable' : 'disabled'}">${p.status === 'disabled' ? '启用' : '禁用'}</button>
-            ${p.source === 'custom' ? `<button class="mini resolve" data-pact="del" data-pid="${esc(p.id)}">删除</button>` : ''}
+            ${p.source === 'custom' ? `<button class="mini" data-pact="edit" data-pid="${esc(p.id)}">编辑</button><button class="mini resolve" data-pact="del" data-pid="${esc(p.id)}">删除</button>` : ''}
           </td></tr>`).join('')
       : '<tr><td colspan="6" class="empty">无剧本</td></tr>';
     document.querySelectorAll('[data-pact]').forEach((b) => {
@@ -490,6 +490,8 @@ async function refreshResponses() {
           if (b.dataset.pact === 'toggle') {
             await jget(`/api/v1/playbooks/${pid}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: b.dataset.st }) });
             toast(`剧本 ${pid} 已${b.dataset.st === 'disabled' ? '禁用' : '启用'}（热生效）`);
+          } else if (b.dataset.pact === 'edit') {
+            openPbEditor(b.dataset.pid);
           } else if (b.dataset.pact === 'del') {
             if (!confirm(`删除自定义剧本 ${pid}？`)) return;
             await jget(`/api/v1/playbooks/${pid}`, { method: 'DELETE' });
@@ -1533,6 +1535,39 @@ async function openRuleEditor(rid) {
         : await jget('/api/v1/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) });
       toast('已保存并热生效（全分片 ≤15s）');
       closeAlertModal(); refreshRules();
+    } catch (e) { toast('保存失败: ' + e.message, true); }
+  };
+  $('alertModalBody').appendChild(save);
+}
+
+/* ===== 剧本编辑器（新建/编辑，Schema 服务端校验，热生效） ===== */
+const PB_TEMPLATE = {
+  id: "pb.custom.my-playbook", name: "我的自定义剧本", version: "1.0", status: "stable",
+  trigger: { rules: ["rule.host.ssh-bruteforce"] },
+  steps: ["ticket.create", "notify.sec_team"]
+};
+$('pbNew').onclick = () => openPbEditor(null);
+
+async function openPbEditor(pid) {
+  const list = await jget('/api/v1/playbooks');
+  const cur = pid ? list.playbooks.find((p) => p.id === pid) : null;
+  const editable = cur ? { id: cur.id, name: cur.name, version: cur.version, status: cur.status, trigger: { rules: cur.rules }, steps: cur.steps } : PB_TEMPLATE;
+  const ta = document.createElement('textarea');
+  ta.value = JSON.stringify(editable, null, 2); ta.className = 'sqlbox'; ta.style.minHeight = '300px';
+  $('alertModalTitle').textContent = pid ? '编辑剧本（custom）' : '新建剧本（触发规则须 rule.* / steps 为动作数组）';
+  $('alertModalBody').innerHTML = ''; $('alertModalBody').appendChild(ta);
+  ['alertAck', 'alertResolve', 'alertGoEvents'].forEach((i) => { const el = $(i); if (el) el.classList.add('hidden'); });
+  $('alertModal').classList.add('open');
+  const save = document.createElement('button');
+  save.className = 'btn primary'; save.textContent = '保存（热生效）'; save.style.marginTop = '10px';
+  save.onclick = async () => {
+    try {
+      const def = JSON.parse(ta.value);
+      const r = pid
+        ? await jget(`/api/v1/playbooks/${pid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) })
+        : await jget('/api/v1/playbooks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) });
+      toast('剧本已保存并热生效（全分片 ≤15s）');
+      closeAlertModal(); refreshResponses();
     } catch (e) { toast('保存失败: ' + e.message, true); }
   };
   $('alertModalBody').appendChild(save);
