@@ -438,7 +438,12 @@ function renderRules() {
     <td><span class="tag ${esc(x.domain)}">${esc(x.domain)}</span></td>
     <td class="dim">${esc(x.category)}</td>
     <td><span class="tag ${esc(x.severity)}">${esc(x.severity)}</span></td>
-    <td class="mono">${esc((x.techniques || []).join(' '))}</td></tr>`).join('');
+    <td class="mono">${esc((x.techniques || []).join(' '))}</td>
+    <td><span class="tag ${x.source === 'custom' ? 'merged' : 'info'}">${esc(x.source || 'builtin')}</span>${x.status === 'disabled' ? ' <span class="tag critical">已禁用</span>' : ''}</td>
+    <td>
+      <button class="mini" data-ract="toggle" data-rid="${esc(x.id)}" data-st="${x.status === 'disabled' ? 'stable' : 'disabled'}">${x.status === 'disabled' ? '启用' : '禁用'}</button>
+      ${x.source === 'custom' ? `<button class="mini" data-ract="edit" data-rid="${esc(x.id)}">编辑</button><button class="mini resolve" data-ract="del" data-rid="${esc(x.id)}">删除</button>` : ''}
+    </td></tr>`).join('');
 }
 
 document.querySelectorAll('#ruleDomainChips .chip').forEach((c) => {
@@ -1452,4 +1457,62 @@ async function openRuleDetail(ruleId) {
     const origClose = $('alertModalClose').onclick;
     $('alertModalClose').onclick = () => { origClose && origClose(); closeAlertModal(); ['alertAck', 'alertResolve', 'alertGoEvents'].forEach((i) => { const el = $(i); if (el) el.classList.remove('hidden'); }); };
   } catch (e) { toast('规则详情加载失败: ' + e.message, true); }
+}
+
+/* ===== 规则管理：启禁/删除/编辑/新建（全分片热生效 ≤15s） ===== */
+const RULE_TEMPLATE = {
+  id: "rule.custom.my-rule", name: "我的自定义规则", version: "1.0", status: "stable",
+  author: "console", domain: "it", category: "host-security",
+  tactics: ["TA0006 凭证访问"], techniques: ["T1110 密码猜解"],
+  severity: "medium",
+  detection: { source: "event.security.auth", window: "5m", group_by: ["src.ip"],
+    condition: "event.category == 'authentication' and event.outcome == 'failure' and count() >= 10" },
+  response: { default: ["ticket.create", "notify.sec_team"] },
+  triage: "研判说明：写清楚值班人员第一眼需要知道什么（至少 20 字）。" ,
+  references: ["https://attack.mitre.org/techniques/T1110/"]
+};
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-ract]');
+  if (!btn) return;
+  e.stopPropagation();
+  const rid = btn.dataset.rid;
+  const act = btn.dataset.ract;
+  if (act === 'toggle') {
+    await jget(`/api/v1/rules/${rid}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: btn.dataset.st }) });
+    toast(`规则 ${rid} 已${btn.dataset.st === 'disabled' ? '禁用' : '启用'}（全分片热生效）`);
+    refreshRules();
+  } else if (act === 'del') {
+    if (!confirm(`确认删除自定义规则 ${rid}？`)) return;
+    await jget(`/api/v1/rules/${rid}`, { method: 'DELETE' });
+    toast(`规则 ${rid} 已删除`); refreshRules();
+  } else if (act === 'edit') {
+    openRuleEditor(rid);
+  }
+});
+$('ruleNew').onclick = () => openRuleEditor(null);
+
+async function openRuleEditor(rid) {
+  const cur = rid ? await jget('/api/v1/rules/' + encodeURIComponent(rid)) : null;
+  const json = JSON.stringify(cur ?? RULE_TEMPLATE, null, 2);
+  const ta = document.createElement('textarea');
+  ta.value = json; ta.className = 'sqlbox'; ta.style.minHeight = '380px';
+  $('alertModalTitle').textContent = rid ? '编辑规则（Schema 校验通过才能保存）' : '新建规则（模板已填，改 id/condition 等）';
+  $('alertModalBody').innerHTML = '';
+  $('alertModalBody').appendChild(ta);
+  ['alertAck', 'alertResolve', 'alertGoEvents'].forEach((i) => { const el = $(i); if (el) el.classList.add('hidden'); });
+  $('alertModal').classList.add('open');
+  const save = document.createElement('button');
+  save.className = 'btn primary'; save.textContent = '保存（热生效）'; save.style.marginTop = '10px';
+  save.onclick = async () => {
+    try {
+      const def = JSON.parse(ta.value);
+      const r = rid
+        ? await jget(`/api/v1/rules/${rid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) })
+        : await jget('/api/v1/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) });
+      toast('已保存并热生效（全分片 ≤15s）');
+      closeAlertModal(); refreshRules();
+    } catch (e) { toast('保存失败: ' + e.message, true); }
+  };
+  $('alertModalBody').appendChild(save);
 }

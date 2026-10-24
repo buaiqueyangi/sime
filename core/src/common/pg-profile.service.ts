@@ -96,6 +96,8 @@ interface RulesRow {
   techniques: string[];
   definition: unknown;
   status: string;
+  source: string;
+  updated_at: Generated<Date>;
 }
 interface PlaybookRunsRow {
   id: Generated<number>;

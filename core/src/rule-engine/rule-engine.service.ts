@@ -52,9 +52,12 @@ export class RuleEngineService implements OnModuleInit {
           techniques: (data['techniques'] as string[]) ?? [],
           definition: data,
           status: String(data['status'] ?? 'draft'),
+          source: 'builtin',
+          updated_at: new Date(),
         })
         .onConflict((oc) =>
           oc.column('id').doUpdateSet({
+            source: 'builtin',
             name: String(data['name']),
             severity: String(data['severity'] ?? 'info'),
             definition: data,
@@ -116,12 +119,43 @@ export class RuleEngineService implements OnModuleInit {
   }
 
   private onModuleInitEngine(): void {
-    // 逐条编译：单条坏规则只跳过并告警，绝不杀死整个平台（生产教训）
+    // 立即可用（空引擎），异步构建随后整体替换——避免 worker 启动期访问 undefined
+    this.engine = new (require('./rule-engine').RuleEngine)([]);
+    void this.buildEngine();
+    this.startVersionPoll();
+  }
+
+  /** 构建引擎：文件规则（builtin）+ DB 状态覆盖（禁用）+ DB 自定义规则（custom）。
+   *  单条坏规则只跳过并告警，绝不杀死整个平台（生产教训）。 */
+  private async buildEngine(): Promise<void> {
     const defs = this.registry.get('rules').entries;
+    const db = this.pg.database;
+
+    // DB 覆盖与自定义（等 PG 就绪，最多 60s——晚启动不再锁死内存模式）
+    let disabledIds = new Set<string>();
+    let customDefs: SimeRule[] = [];
+    if (db) {
+      for (let i = 0; i < 12; i++) {
+        try {
+          const rows = (await (db as any).selectFrom('rules').select(['id', 'source', 'status', 'definition']).execute()) as {
+            id: string; source: string; status: string; definition: unknown;
+          }[];
+          disabledIds = new Set(rows.filter((r) => r.status === 'disabled' || r.status === 'deprecated').map((r) => r.id));
+          customDefs = rows
+            .filter((r) => r.source === 'custom' && r.status !== 'disabled')
+            .map((r) => r.definition as unknown as SimeRule);
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 5000));
+        }
+      }
+    }
+
     const valid: SimeRule[] = [];
     let failed = 0;
     for (const { file, data } of defs) {
       try {
+        if (disabledIds.has(String(data['id']))) continue; // builtin 被禁用
         valid.push(data as unknown as SimeRule);
       } catch (e) {
         failed++;
@@ -129,6 +163,10 @@ export class RuleEngineService implements OnModuleInit {
       }
     }
     try {
+      // 自定义规则并入编译（坏规则逐条跳过，不拖垮平台）
+      for (const c of customDefs) {
+        try { valid.push(c); } catch { failed++; }
+      }
       this.engine = new RuleEngine(valid);
       this.logger.log(`rules compiled: ${this.engine.rules.length}${failed ? `（${failed} 条装载失败已跳过）` : ''}`);
       this.compileFailures = failed;
@@ -149,6 +187,38 @@ export class RuleEngineService implements OnModuleInit {
       this.compileFailures = failed;
       this.logger.warn(`rules compiled (degraded): ${this.engine.rules.length}, skipped ${failed}`);
     }
+  }
+
+  /** 版本轮询：config.rules.version 变化 → 热重建（全分片生效，≤15s 延迟）。 */
+  private rulesVersion = '';
+  private startVersionPoll(): void {
+    const db = this.pg.database;
+    if (!db) return;
+    const poll = async () => {
+      try {
+        const rows = (await (db as any).selectFrom('config').select('value').where('key', '=', 'rules.version').execute()) as { value: unknown }[];
+        const v = JSON.stringify(rows[0]?.value ?? '');
+        if (this.rulesVersion && v !== this.rulesVersion) {
+          this.logger.log(`规则版本变化 ${v} → 热重建引擎`);
+          await this.buildEngine();
+        }
+        this.rulesVersion = v;
+      } catch { /* PG 抖动忽略 */ }
+    };
+    void poll();
+    setInterval(() => void poll(), 15_000).unref();
+  }
+
+  /** 写操作后 bump 版本（API 调用），触发全分片热更新。 */
+  async bumpRulesVersion(): Promise<void> {
+    const db = this.pg.database;
+    if (!db) return;
+    await (db as any)
+      .insertInto('config')
+      .values({ key: 'rules.version', value: JSON.stringify(String(Date.now())) })
+      .onConflict((oc: any) => oc.column('key').doUpdateSet({ value: JSON.stringify(String(Date.now())), updated_at: (globalThis as any).sqlNow ?? new Date() }))
+      .execute();
+    await this.buildEngine(); // 本进程立即生效
   }
 
   private compileFailures = 0;

@@ -200,6 +200,7 @@
         <div class="panel">
           <div class="panel-head">
             <h2>检测规则库 <span id="ruleCount" class="count"></span></h2>
+            <button id="ruleNew" class="btn primary" style="margin-left:auto">＋ 新建规则</button>
             <div class="chips" id="ruleDomainChips">
               <button data-domain="all" class="chip active">全部</button>
               <button data-domain="it" class="chip">it</button>
@@ -208,7 +209,7 @@
             </div>
           </div>
           <table>
-            <thead><tr><th>规则 ID</th><th>名称</th><th>域</th><th>类别</th><th>级别</th><th>MITRE ATT&CK</th></tr></thead>
+            <thead><tr><th>规则 ID</th><th>名称</th><th>域</th><th>类别</th><th>级别</th><th>MITRE ATT&CK</th><th>来源</th><th>操作</th></tr></thead>
             <tbody id="rules"></tbody>
           </table>
         </div>
