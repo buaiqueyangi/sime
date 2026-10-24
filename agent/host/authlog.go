@@ -1,3 +1,5 @@
+//go:build linux
+
 package main
 
 // auth.log 事件流：tail + 解析 → ECS（对齐 adapter.generic.linux-auth 映射）。

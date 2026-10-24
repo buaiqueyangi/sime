@@ -26,7 +26,10 @@ export class ResponseService {
   constructor(
     private readonly pg: PgProfileService,
     private readonly notify: NotifyService,
-  ) {}
+  ) {
+    // cmd 超时清理：Agent 离线/掉线时，sent 不应永远悬置
+    setInterval(() => void this.sweepCmdTimeout(), 15_000).unref();
+  }
 
   async execute(alert: SimeAlert, alertId: number | null): Promise<void> {
     for (const raw of alert.actions ?? []) {
@@ -58,7 +61,7 @@ export class ResponseService {
               .values({ alert_id: alertId, channel, payload: { groupKey: alert.groupKey, severity: alert.severity }, status: st })
               .execute();
           this.memory.notifications.unshift({ channel, groupKey: alert.groupKey, ts: Date.now() });
-        } else if (AGENT_ACTIONS.has(name)) {
+        } else if (AGENT_ACTIONS.has(name) || name === 'account.suspend') {
           const r = this.resolveTarget(name, positional, kv, alert);
           if (this.cmdEnabled() && r.device) {
             await this.dispatchCommand(alertId, name, r.args, r.target, db, r.device);
@@ -122,6 +125,28 @@ export class ResponseService {
 
   private cmdClient?: MqttClient;
   private cmdPending = new Map<string, number | null>(); // cmd_id -> response_audit.id
+  private cmdSentAt = new Map<string, number>();
+
+
+  private async sweepCmdTimeout(): Promise<void> {
+    const now = Date.now();
+    const db = this.pg.database;
+    for (const [cmdId, sentAt] of this.cmdSentAt) {
+      if (now - sentAt < 30_000) continue;
+      const auditId = this.cmdPending.get(cmdId) ?? null;
+      this.cmdPending.delete(cmdId);
+      this.cmdSentAt.delete(cmdId);
+      this.logger.warn(`cmd 超时无回执: ${cmdId}`);
+      if (db && auditId) {
+        await (db as any)
+          .updateTable('response_audit')
+          .set({ status: 'timeout', reply: { detail: '30s 未收到 Agent 回执（设备离线或非 host-agent）' } })
+          .where('id', '=', auditId)
+          .execute()
+          .catch(() => undefined);
+      }
+    }
+  }
 
   cmdEnabled(): boolean {
     return AGENT_ACTIONS !== undefined && !!process.env.SIME_MQTT_URL && !!this.pg.database;
@@ -192,6 +217,8 @@ export class ResponseService {
 
   /** 下发命令：审计行 status=sent + cmd_id；Agent 回执后更新 executed/failed/skipped。 */
   private async dispatchCommand(alertId: number | null, action: string, args: Record<string, unknown>, target: string, db: any, deviceId?: string | null): Promise<void> {
+    // 语义别名：剧本里的 suspend 在 agent 侧即 lock
+    if (action === 'account.suspend') action = 'account.lock';
     if (!deviceId) {
       this.logger.warn(`cmd 无目标主机（事件缺 dst.asset_id），动作保持 simulated: ${action}`);
       return;
@@ -228,6 +255,7 @@ export class ResponseService {
       auditId = (rows[0] as { id?: number } | undefined)?.id ?? null;
     }
     this.cmdPending.set(cmdId, auditId);
+    this.cmdSentAt.set(cmdId, Date.now());
     client.publish('sime/v1/' + deviceId + '/cmd', JSON.stringify({ id: cmdId, action, args }), { qos: 1 });
     this.logger.log(`cmd 已下发 ${action} → ${deviceId} (${cmdId})`);
     this.memory.audit.unshift({ action, target, status: 'sent', ts: Date.now() });
@@ -238,6 +266,7 @@ export class ResponseService {
     if (!reply?.id) return;
     const auditId = this.cmdPending.get(reply.id);
     this.cmdPending.delete(reply.id);
+    this.cmdSentAt.delete(reply.id);
     const status = reply.status === 'executed' ? 'executed' : reply.status === 'skipped' ? 'skipped' : 'failed';
     this.logger.log('cmd 回执 %s: %s (%s)', reply.action, status, reply.detail ?? '');
     const db = this.pg.database;

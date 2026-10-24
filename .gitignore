@@ -8,3 +8,5 @@ demo/out/
 .DS_Store
 core/data/
 agent/host/sime-agent-linux-amd64
+agent/host/sime-agent-linux-arm64
+agent/host/sime-agent.exe

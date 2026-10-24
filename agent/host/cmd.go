@@ -113,6 +113,10 @@ func (a *Agent) execCommand(cmd AgentCmd) AgentReply {
 		return a.cmdProcessKill(base, arg("name"))
 	case "file.quarantine":
 		return a.cmdFileQuarantine(base, arg("path"))
+	case "isolate.host":
+		return a.cmdIsolate(base)
+	case "isolate.remove":
+		return a.cmdIsolateRemove(base)
 	case "ping":
 		return AgentReply{ID: cmd.ID, Action: cmd.Action, Status: "executed", Detail: "pong"}
 	default:
@@ -215,5 +219,60 @@ func (a *Agent) cmdFileQuarantine(base AgentReply, path string) AgentReply {
 	_ = os.Chmod(dst, 0)
 	base.Status = "executed"
 	base.Detail = fmt.Sprintf("已隔离 %s → %s（权限 000）", path, dst)
+	return base
+}
+
+// ==================== 主机隔离（isolate.host / isolate.remove） ====================
+// 自定义链 SIME-ISO：默认全断新连接，放行 lo / ESTABLISHED / protect 网段。
+// 挂到 INPUT 首位；remove 时摘链并清空——可干净回退，不留残留规则。
+
+const isoChain = "SIME-ISO"
+
+func (a *Agent) cmdIsolate(base AgentReply) AgentReply {
+	if _, err := runCmd("iptables", "-L", isoChain); err != nil {
+		if _, err := runCmd("iptables", "-N", isoChain); err != nil {
+			base.Status, base.Detail = "failed", "创建链失败: "+err.Error()
+			return base
+		}
+	}
+	runCmd("iptables", "-F", isoChain)
+	// 放行顺序：lo → 已建立 → 保护网段 → 其余全断
+	if _, err := runCmd("iptables", "-A", isoChain, "-i", "lo", "-j", "RETURN"); err != nil {
+		base.Status, base.Detail = "failed", err.Error()
+		return base
+	}
+	if _, err := runCmd("iptables", "-A", isoChain, "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "RETURN"); err != nil {
+		base.Status, base.Detail = "failed", err.Error()
+		return base
+	}
+	for _, n := range protectNets {
+		if _, err := runCmd("iptables", "-A", isoChain, "-s", n.String(), "-j", "RETURN"); err != nil {
+			base.Status, base.Detail = "failed", err.Error()
+			return base
+		}
+	}
+	if _, err := runCmd("iptables", "-A", isoChain, "-j", "DROP"); err != nil {
+		base.Status, base.Detail = "failed", err.Error()
+		return base
+	}
+	// 挂到 INPUT 首位（幂等：已存在则先摘再挂）
+	runCmd("iptables", "-D", "INPUT", "-j", isoChain)
+	if _, err := runCmd("iptables", "-I", "INPUT", "-j", isoChain); err != nil {
+		base.Status, base.Detail = "failed", "挂链失败: "+err.Error()
+		return base
+	}
+	base.Status = "executed"
+	base.Detail = fmt.Sprintf("主机已隔离（放行 lo/ESTABLISHED/%d个保护网段，其余新连接全断）", len(protectNets))
+	return base
+}
+
+func (a *Agent) cmdIsolateRemove(base AgentReply) AgentReply {
+	runCmd("iptables", "-D", "INPUT", "-j", isoChain)
+	runCmd("iptables", "-F", isoChain)
+	if _, err := runCmd("iptables", "-X", isoChain); err != nil {
+		base.Status, base.Detail = "failed", "删除链失败: "+err.Error()
+		return base
+	}
+	base.Status, base.Detail = "executed", "隔离已解除（链已移除，无残留规则）"
 	return base
 }
