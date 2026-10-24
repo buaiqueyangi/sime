@@ -1,0 +1,23 @@
+id: rule.host.linux-auditd-at-job-schedule
+name: at/anacron 隐匿计划任务
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 持久化", "TA0002 执行"]
+techniques: ["T1053.002 At 计划任务"]
+severity: medium
+detection:
+  source: event.security.hids
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "process.name in ('at','batch','anacron') and process.command_line matches '(?i)-f|now\\+'"
+  except: "user.name matches '(?i)^(root|backup|deploy|ansible)$'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  at/batch 不经过 crontab 目录，多数文件完整性基线不覆盖（隐匿持久化首选）：
+  atq 列出队列逐条检查命令内容，atrm 清除恶意任务并审计派生它的会话。
+references:
+  - https://attack.mitre.org/techniques/T1053/002/

@@ -1,0 +1,24 @@
+id: rule.ot.bacnet-device-reinit
+name: BACnet 设备重初始化指令
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 影响"]
+techniques: ["T0816 重启或重置设备"]
+severity: critical
+detection:
+  source: adapter.ot.bacnet-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and bacnet.service == 'reinitialize_device'"
+  except: "src.asset.labels.role in ('building-management','maintenance-station')"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=15m)", "notify.ot_duty"]
+triage: >
+  ReinitializeDevice 可令控制器冷启动/回出厂态（state=1 时清空数据库）：
+  核对指令源与参数 state；非维护窗口出现立即隔离源并在 BAS 侧确认设备
+  运行参数完整性。
+references:
+  - https://attack.mitre.org/techniques/T0816/

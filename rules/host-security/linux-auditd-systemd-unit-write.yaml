@@ -1,0 +1,24 @@
+id: rule.host.linux-auditd-systemd-unit-write
+name: 审计捕获 systemd 单元文件写入
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 持久化", "TA0004 权限提升"]
+techniques: ["T1543.002 Systemd 服务"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('audit_path','audit_syscall') and file.path matches '^/etc/systemd/system/'"
+  except: "process.name in ('ansible','puppet','chef-client','cloud-init','rpm','dpkg','systemctl')"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  新建/改写 systemd unit（尤其 Timer/Service 指向 /tmp 或用户目录二进制）是
+  root 级持久化：检查 unit 的 ExecStart 内容与之后 5 分钟的 daemon-reload；
+  恶意单元禁用并删除，同时回溯写入进程的 ancestry。
+references:
+  - https://attack.mitre.org/techniques/T1543/002/

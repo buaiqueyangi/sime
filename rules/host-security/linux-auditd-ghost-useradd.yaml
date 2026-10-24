@@ -1,0 +1,24 @@
+id: rule.host.linux-auditd-ghost-useradd
+name: 无登录上下文执行 useradd（幽灵账户）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 持久化"]
+techniques: ["T1136.001 本地账户"]
+severity: critical
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('audit_user_acct','audit_add_user') or (process.name in ('useradd','adduser') and src.user.id in ('4294967295','-1','unset'))"
+  except: "process.parent_name in ('ansible','cloud-init','salt-minion','puppet')"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  auditd auid=4294967295 表示调用方没有登录会话（webshell/木马/内存马触发的
+  账户创建）：立即冻结新账户（usermod -L）并检查 /etc/passwd 尾部新增 UID=0 行；
+  与同源 web 告警做时间窗关联。
+references:
+  - https://attack.mitre.org/techniques/T1136/001/

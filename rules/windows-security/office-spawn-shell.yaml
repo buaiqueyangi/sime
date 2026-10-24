@@ -1,0 +1,22 @@
+id: rule.win.office-spawn-shell
+name: Office 程序派生 Shell 进程
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0001 初始执行"]
+techniques: ["T1566.001 鱼叉附件", "T1059 命令解释器"]
+severity: critical
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '1' and process.parent_name matches '(?i)(winword|excel|powerpnt|outlook|msaccess)\\.exe' and process.name matches '(?i)(cmd|powershell|pwsh|wscript|cscript|mshta|rundll32)\\.exe'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  Office 宏/OLE/公式注入成功执行的强特征（初始访问落地瞬间）：
+  提取子进程命令行中的下载 URL 与落盘路径；确认为恶意后立即隔离主机并从邮件网关回溯同附件收件人。
+references:
+  - https://attack.mitre.org/techniques/T1566/001/

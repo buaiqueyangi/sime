@@ -1,0 +1,22 @@
+id: rule.win.byovd-driver-load
+name: 用户目录加载内核驱动（BYOVD）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1553.002 破坏代码签名", "T1068 权限提升漏洞利用"]
+severity: critical
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '6' and file.path matches '(?i)(users|temp|programdata|downloads)'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  内核驱动从用户可写路径加载（合法驱动均位于 DriverStore）是 BYOVD 攻击特征——
+  借 vulnerable driver 杀 EDR、提权：提取驱动哈希与微软漏洞驱动库比对，确认后立即隔离并移除驱动。
+references:
+  - https://attack.mitre.org/techniques/T1553/002/

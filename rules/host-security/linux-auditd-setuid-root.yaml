@@ -1,0 +1,24 @@
+id: rule.host.linux-auditd-setuid-root
+name: 非特权进程调用 setuid(0)
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0004 权限提升"]
+techniques: ["T1548.001 Setuid 与 Setgid", "T1068 提权漏洞利用"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name matches '(?i)set(set)?uid' and src.user.id not in ('0','root')"
+  except: "process.name in ('sudo','su','pkexec','passwd','chsh','chfn','mount','newgrp')"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  非 root 起源进程尝试 setuid(0) 是提权漏洞利用（pwnkit 类 CVE、SUID 错配
+  二进制）的内核级痕迹：记录目标二进制路径与版本，比对已知提权 CVE 数据库
+  并评估补丁；命中已知漏洞立即修补并审查本地 SUID 清单。
+references:
+  - https://attack.mitre.org/techniques/T1068/

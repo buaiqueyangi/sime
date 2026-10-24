@@ -1,0 +1,24 @@
+id: rule.host.linux-auditd-sshd-config-tamper
+name: 审计捕获 sshd_config 篡改
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 持久化"]
+techniques: ["T1098.004 SSH 授权密钥", "T1562.004 削弱网络防御"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('audit_path','audit_syscall') and file.path matches '/etc/ssh/sshd_config'"
+  except: "process.name in ('sshd-keygen','ansible','puppet','chef-client','cloud-init')"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  PermitRootLogin yes / AuthorizedKeysFile 指向攻击者路径 / 新增 ListenAddress
+  是打开持久化后门的常见手段：diff 配置变更并检查 authorized_keys 目录时间戳；
+  非变更窗口内修改按入侵处置并重启 sshd 恢复基线。
+references:
+  - https://attack.mitre.org/techniques/T1098/004/

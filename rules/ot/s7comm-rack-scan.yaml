@@ -1,0 +1,24 @@
+id: rule.ot.s7comm-rack-scan
+name: S7comm 机架/槽位扫描
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0107 发现"]
+techniques: ["T0886 远程服务", "T0842 网络服务扫描"]
+severity: medium
+detection:
+  source: adapter.ot.s7comm-audit
+  window: 5m
+  group_by: ["src.asset_id"]
+  condition: "event.category == 'ics-command' and s7.function == 'setup_communication' and count() >= 10"
+  except: "src.asset.labels.role in ('engineering-station','scada-master','historian')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.ot_duty"]
+triage: >
+  高频 setup_communication（0xF0）握手枚举 rack/slot 组合是 S7 资产探测：
+  确认来源主机归属，未知主机接入 OT 网即按违规接入处置并核对交换机
+  MAC 表定位接入端口。
+references:
+  - https://attack.mitre.org/techniques/T0842/

@@ -1,0 +1,23 @@
+id: rule.host.linux-auditd-audit-conf-write
+name: 审计捕获 auditd 规则文件改写
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1562.002 削弱主机日志"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('audit_path','audit_syscall') and file.path matches '^/etc/audit/(rules\\.d/|audit\\.rules)'"
+  except: "process.name in ('ansible','augenrules','puppet')"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  攻击者在清理痕迹前常先删减 audit 规则（-D / 缩小监视范围）：与
+  auditd_stopped 告警关联成链；恢复规则集并检查该时段其他主机是否同手法。
+references:
+  - https://attack.mitre.org/techniques/T1562/002/

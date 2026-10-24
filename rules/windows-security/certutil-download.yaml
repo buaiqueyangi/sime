@@ -1,0 +1,22 @@
+id: rule.win.certutil-download
+name: certutil 凭借证书工具下载载荷
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0011 命令与控制"]
+techniques: ["T1105 入口工具传输"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '1' and process.name matches '(?i)certutil\\.exe' and process.command_line matches '(?i)(-urlcache|-split|-verifyctl|-f)'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  certutil（LOLBAS）常被滥用为系统自带下载器以绕过应用白名单与代理审计：
+  提取命令行 URL 送情报比对，核查落盘文件哈希；非软件分发场景默认按恶意处置。
+references:
+  - https://lolbas-project.github.io/lolbas/Binaries/Certutil/

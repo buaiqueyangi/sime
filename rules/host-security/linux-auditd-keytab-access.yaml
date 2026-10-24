@@ -1,0 +1,24 @@
+id: rule.host.linux-auditd-keytab-access
+name: 非预期进程读取 Kerberos keytab
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: identity
+tactics: ["TA0006 凭证访问"]
+techniques: ["T1552.004 私有密钥", "T1558 窃取或伪造 Kerberos 票据"]
+severity: high
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('audit_path','audit_open') and file.path matches '\\.keytab$'"
+  except: "process.name in ('krb5kdc','sshd','saslauthd','httpd','nginx','gssproxy','smbd')"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  keytab 含服务长期密钥，读取即可离线签发任意服务票据（银票）：
+  核实读取进程是否属于该 keytab 的授权服务；非授权读取立即轮换该服务的
+  keytab（ktutil 更新）并在 KDC 侧审计该主体的票据签发记录。
+references:
+  - https://attack.mitre.org/techniques/T1558/

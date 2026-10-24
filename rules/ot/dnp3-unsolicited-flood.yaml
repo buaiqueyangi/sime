@@ -1,0 +1,23 @@
+id: rule.ot.dnp3-unsolicited-flood
+name: DNP3 非请求响应泛洪
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 影响"]
+techniques: ["T0814 拒绝服务"]
+severity: medium
+detection:
+  source: adapter.ot.dnp3-audit
+  window: 1m
+  group_by: ["src.asset_id"]
+  condition: "event.category == 'ics-traffic' and dnp3.unsolicited == true and count() >= 200"
+response:
+  default: ["ticket.create(sla=30m)", "notify.ot_duty"]
+triage: >
+  从机非请求响应（unsolicited）风暴挤占主站通道带宽可致遥测大面积停滞：
+  区分装置固件缺陷/重发机制失灵与协议模糊攻击；必要时在通道层限速并
+  计划性重启受影响装置。
+references:
+  - https://attack.mitre.org/techniques/T0814/

@@ -1,0 +1,24 @@
+id: rule.ot.cip-service-sweep
+name: EtherNet/IP CIP 服务枚举
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0107 发现"]
+techniques: ["T0842 网络服务扫描", "T0886 远程服务"]
+severity: medium
+detection:
+  source: adapter.ot.cip-audit
+  window: 5m
+  group_by: ["src.asset_id"]
+  condition: "event.category == 'ics-traffic' and cip.service in ('list_services','list_identity','get_attribute_all') and count() >= 50"
+  except: "src.asset.labels.role in ('engineering-station','scada-master','asset-discovery')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.ot_duty"]
+triage: >
+  ListIdentity/ListServices 批量请求是 CIP 资产测绘（攻击者绘制产线拓扑
+  与控制器型号）：确认是否为合法资产扫描窗口；未知源接入即按 OT 违规
+  接入流程处置。
+references:
+  - https://attack.mitre.org/techniques/T0842/

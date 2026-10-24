@@ -1,0 +1,24 @@
+id: rule.ot.dnp3-restart-command
+name: DNP3 冷/热重启指令
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 影响"]
+techniques: ["T0816 重启或重置设备"]
+severity: critical
+detection:
+  source: adapter.ot.dnp3-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and dnp3.function_code in ('13','14')"
+  except: "src.asset.labels.role in ('scada-master','maintenance-station')"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty"]
+triage: >
+  DNP3 FC13/14（cold/warm restart）可令 RTU/继保装置整体复位，冷重启期间
+  保护监视空白：核实指令来源与调度变更票；非计划重启立即上报调度并
+  检查该站所有 DNP3 从机通道日志。
+references:
+  - https://attack.mitre.org/techniques/T0816/

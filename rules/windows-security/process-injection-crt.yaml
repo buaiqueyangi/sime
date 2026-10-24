@@ -1,0 +1,22 @@
+id: rule.win.process-injection-crt
+name: 跨进程远程线程注入（CreateRemoteThread）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1055.003 远程线程注入"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '8' and process.name != 'services.exe' and process.name != 'svchost.exe'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=10m)", "notify.sec_team"]
+triage: >
+  Sysmon Event 8（CreateRemoteThread）跨进程写入线程是进程注入/ hollowing 的直接证据：
+  关注源进程（恶意方）与目标进程（被寄生方）；采集两者内存镜像后隔离主机。
+references:
+  - https://attack.mitre.org/techniques/T1055/003/

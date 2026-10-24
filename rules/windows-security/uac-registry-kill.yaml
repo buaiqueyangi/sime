@@ -1,0 +1,22 @@
+id: rule.win.uac-registry-kill
+name: 注册表禁用 UAC / 静默提升
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避", "TA0004 权限提升"]
+techniques: ["T1112 修改注册表"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '13' and registry.path matches '(?i)(EnableLUA|ConsentPromptBehaviorAdmin|PromptOnSecureDesktop)'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  EnableLUA=0 或 ConsentPromptBehaviorAdmin=0 使后续恶意程序可无提示完成管理员提升：
+  确认变更来源（软件安装/攻击者），非变更窗口内出现立即还原并审计该主机本地管理员组成员。
+references:
+  - https://attack.mitre.org/techniques/T1112/

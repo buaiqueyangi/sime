@@ -1,0 +1,22 @@
+id: rule.ot.s7comm-db-write-unknown
+name: S7comm 未授权源写 DB 块
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 影响"]
+techniques: ["T0831 对过程参数的非法授权修改"]
+severity: critical
+detection:
+  source: adapter.ot.s7comm-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and s7.function == 'write_var' and src.asset.id not in dst.asset.security.command_allowlist"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty"]
+triage: >
+  非授权源向 DB 块写入即直接篡改工艺参数（设定值/联锁阈值）：比对写入
+  偏移与 DB 块定义确定受影响工艺变量，回滚参数并审计该源主机全部 OT 会话。
+references:
+  - https://attack.mitre.org/techniques/T0831/

@@ -1,0 +1,22 @@
+id: rule.win.ifeo-hijack
+name: IFEO 映像劫持（Debugger 键注入）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0004 权限提升", "TA0003 持久化"]
+techniques: ["T1546.012 映像文件执行选项劫持"]
+severity: critical
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '13' and registry.path matches '(?i)Image File Execution Options.*Debugger'"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  向 IFEO 写入 Debugger 值可将任意目标 EXE 的启动重定向到攻击者程序（免文件持久化+权限维持）：
+  还原注册表键值，枚举同批修改的其他劫持目标，排查写入进程 ancestry。
+references:
+  - https://attack.mitre.org/techniques/T1546/012/

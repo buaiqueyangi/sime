@@ -1,0 +1,22 @@
+id: rule.win.dga-dns-lookup
+name: DGA 疑似算法域名解析
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0011 命令与控制"]
+techniques: ["T1568 动态解析算法"]
+severity: medium
+detection:
+  source: adapter.generic.sysmon
+  window: 10m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '22' and dns.question matches '(?i)[a-z0-9]{20,}\\.(top|xyz|click|loan|work|link|live|rest|icu|cyou)'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  超长随机标签 + 廉价 TLD 组合是 DGA 域名生成的强特征：
+  对主机维度聚合域名熵值排序确认；在 DNS 侧封禁该域名族并隔离失陷主机。
+references:
+  - https://attack.mitre.org/techniques/T1568/002/

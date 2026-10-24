@@ -1,0 +1,24 @@
+id: rule.ot.s7comm-plc-control
+name: S7comm 启停 PLC / 擦写固存
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 影响"]
+techniques: ["T0816 重启或重置设备", "T0843 程序下载"]
+severity: critical
+detection:
+  source: adapter.ot.s7comm-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and s7.function in ('stop','start','copy_ram_to_rom','compress')"
+  except: "src.asset.labels.role in ('engineering-station','scada-master')"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty"]
+triage: >
+  S7 STOP 指令直接令 PLC 停机（Stuxnet 式破坏链终点）；copy_ram_to_rom
+  擦写固存属持久化：核对指令源 MAC/IP 是否为工程站，立即在交换机侧封禁
+  该源并对受影响产线执行安全停车确认。
+references:
+  - https://attack.mitre.org/techniques/T0816/

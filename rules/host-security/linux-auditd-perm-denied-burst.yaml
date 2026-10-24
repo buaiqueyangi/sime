@@ -1,0 +1,23 @@
+id: rule.host.linux-auditd-perm-denied-burst
+name: 高频审计拒绝（探测/枚举噪声）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0007 发现"]
+techniques: ["T1083 文件与目录发现", "T1087 账户发现"]
+severity: low
+detection:
+  source: event.security.hids
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "event.name == 'audit_denied' and count() >= 100"
+response:
+  default: ["notify.sec_team"]
+triage: >
+  短时大量 EACCES/EPERM 审计记录多为自动化工具按字典枚举路径/账户（fuzz、
+  权限探测）：按 process.name 与目标文件路径聚类定位噪声源；确认为扫描器后
+  加入维护窗白名单，其余按失陷主机排查。
+references:
+  - https://attack.mitre.org/techniques/T1083/

@@ -1,0 +1,22 @@
+id: rule.win.service-dll-persistence
+name: 注册表 ServiceDLL 持久化
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0003 持久化", "TA0004 权限提升"]
+techniques: ["T1543.003 Windows 服务"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '13' and registry.path matches '(?i)CurrentControlSet\\\\Services\\\\.*Parameters\\\\ServiceDll'"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  修改服务 Parameters\\ServiceDll 可让 svchost 在系统启动时加载任意 DLL（SYSTEM 级持久化）：
+  比对 DLL 路径与签发者；非系统组件目录落盘即按恶意服务处置并回滚注册表。
+references:
+  - https://attack.mitre.org/techniques/T1543/003/

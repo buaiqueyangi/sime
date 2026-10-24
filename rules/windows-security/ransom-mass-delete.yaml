@@ -1,0 +1,22 @@
+id: rule.win.ransom-mass-delete
+name: 高频文件删除（勒索行为链）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0040 影响"]
+techniques: ["T1486 数据加密勒索", "T1070.004 文件删除"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '23' and count() >= 50"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  5 分钟内 50+ 文件删除事件伴随同进程大量写入即勒索软件 shred 阶段（删卷影+改后缀+加密回写）：
+  立即断网隔离并从最近快照恢复；利用告警关联进程 ancestry 定位投放源头。
+references:
+  - https://attack.mitre.org/techniques/T1486/

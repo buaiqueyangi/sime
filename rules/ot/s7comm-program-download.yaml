@@ -1,0 +1,23 @@
+id: rule.ot.s7comm-program-download
+name: S7comm 非工程站上下传程序块
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0101 初始访问", "TA0104 影响"]
+techniques: ["T0843 程序下载"]
+severity: critical
+detection:
+  source: adapter.ot.s7comm-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and s7.function in ('download','download_block','upload','start_upload','delete_block') and src.asset.labels.role != 'engineering-station'"
+response:
+  default: ["plc.deny(dst.asset_id)", "isolate.host(src.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty"]
+triage: >
+  S7comm 上/下装块（0x1A/0x1B）仅允许工程站执行；普通网段出现即程序篡改
+  预备动作（替换逻辑块可造成停产/物理损害）：立即阻断会话，核对工程站
+  TIA Portal 变更窗口，全厂 S7 资产做块校验和比对。
+references:
+  - https://attack.mitre.org/techniques/T0843/

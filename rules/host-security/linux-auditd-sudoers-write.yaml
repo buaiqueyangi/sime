@@ -1,0 +1,23 @@
+id: rule.host.linux-auditd-sudoers-write
+name: 审计捕获 sudoers 文件篡改
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0004 权限提升", "TA0003 持久化"]
+techniques: ["T1548.003 Sudo 与 Sudo 缓存"]
+severity: critical
+detection:
+  source: event.security.hids
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.name in ('audit_path','audit_syscall') and file.path matches '^/etc/(sudoers|sudoers\\.d/)'"
+  except: "process.name in ('visudo','ansible','puppet','chef-client')"
+response:
+  default: ["isolate.host(dst.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  sudoers 新增 NOPASSWD 行或覆盖 ALL=(ALL) 可将任意账户提权至 root 并持久化：
+  用 visudo -c 校验当前语法，diff 备份定位新增行；恶意变更立即回滚并重置受影响账户口令。
+references:
+  - https://attack.mitre.org/techniques/T1548/003/

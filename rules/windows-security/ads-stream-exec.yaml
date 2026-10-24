@@ -1,0 +1,22 @@
+id: rule.win.ads-stream-exec
+name: NTFS 备用数据流执行载体
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1564.004 NTFS 备用数据流"]
+severity: medium
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '15' and (file.path matches '(?i):(exe|dll|ps1|bat|cmd|vbs|js):' or process.command_line matches '(?i)(Zone\\.Identifier|streams\\.exe)')"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  Sysmon Event 15（FileCreateStreamHash）捕获 ADS 写入——可执行体藏于数据流可绕过常规文件扫描：
+  使用 dir /r 枚举完整流清单，删除恶意流并溯源写入进程。
+references:
+  - https://attack.mitre.org/techniques/T1564/004/

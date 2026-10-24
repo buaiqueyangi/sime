@@ -1,0 +1,22 @@
+id: rule.ot.bacnet-writeproperty-critical
+name: BACnet 关键对象越权写
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 影响"]
+techniques: ["T0831 对过程参数的非法授权修改"]
+severity: high
+detection:
+  source: adapter.ot.bacnet-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and bacnet.service == 'write_property' and bacnet.object matches '(?i)(priority_array|present_value|schedule_exception)' and src.asset.id not in dst.asset.security.command_allowlist"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=15m)", "notify.ot_duty"]
+triage: >
+  写 priority_array 可劫持楼宇/园区设备最终控制权（空调停运、门禁旁路）：
+  恢复对象优先级数组并锁定写入源；核对 BAS 系统变更单后评估物理影响。
+references:
+  - https://attack.mitre.org/techniques/T0831/

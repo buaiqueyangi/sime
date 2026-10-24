@@ -1,0 +1,24 @@
+id: rule.ot.profinet-dcp-reset
+name: Profinet DCP 改名/恢复出厂
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 影响"]
+techniques: ["T0816 重启或重置设备", "T0862 欺骗报告源"]
+severity: critical
+detection:
+  source: adapter.ot.profinet-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and profinet.service in ('dcp_set_name','dcp_reset_factory','dcp_set_ip')"
+  except: "src.asset.labels.role == 'engineering-station'"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty"]
+triage: >
+  DCP Set 名称/复位可令现场设备离线或冒充其他设备（ARP 层身份欺骗，
+  破坏 Profinet 实时通信）：核对 2 层接入端口与源 MAC，隔离违规主机，
+  重建设备组态后验证 IO 通信恢复。
+references:
+  - https://attack.mitre.org/techniques/T0816/

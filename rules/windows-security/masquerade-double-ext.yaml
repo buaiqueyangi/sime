@@ -1,0 +1,22 @@
+id: rule.win.masquerade-double-ext
+name: 双扩展名伪装文件落地
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0005 防御规避"]
+techniques: ["T1036.007 双扩展名伪装"]
+severity: medium
+detection:
+  source: adapter.generic.sysmon
+  window: 5m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '11' and file.path matches '(?i)\\.(pdf|doc|docx|xls|xlsx|jpg|png|txt)\\.(exe|scr|cmd|bat|js|vbs|pif)$'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.sec_team"]
+triage: >
+  报表/图片后缀下隐藏可执行扩展是钓鱼载荷的典型伪装：
+  确认文件来源（邮件附件/IM 传输/网盘同步），回溯打开该文件的用户并检查后续进程派生链。
+references:
+  - https://attack.mitre.org/techniques/T1036/007/

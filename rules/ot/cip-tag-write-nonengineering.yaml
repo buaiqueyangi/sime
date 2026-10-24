@@ -1,0 +1,23 @@
+id: rule.ot.cip-tag-write-nonengineering
+name: EtherNet/IP 非工程站写标签
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 影响"]
+techniques: ["T0831 对过程参数的非法授权修改", "T0843 程序下载"]
+severity: critical
+detection:
+  source: adapter.ot.cip-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and cip.service in ('write_tag','write_tag_fragment') and src.asset.labels.role != 'engineering-station'"
+response:
+  default: ["plc.deny(dst.asset_id)", "isolate.host(src.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty"]
+triage: >
+  CIP Write Tag（0x4D/0x4E）直接改写控制器标签值（含 Tag 类型混淆写
+  破坏内存布局）：解析被写标签名与数据类型，确认工艺影响范围；同时
+  检查该源主机是否携带 FactoryTalk 工具的违规接入。
+references:
+  - https://attack.mitre.org/techniques/T0831/

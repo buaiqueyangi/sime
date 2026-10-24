@@ -1,0 +1,22 @@
+id: rule.win.powershell-rare-outbound
+name: 脚本解释器直连外网 IP
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0011 命令与控制"]
+techniques: ["T1071 应用层协议", "T1059.001 PowerShell"]
+severity: high
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.code == '3' and process.name matches '(?i)(powershell|pwsh|wscript|cscript|mshta|rundll32|regsvr32)\\.exe' and dst.ip != ''"
+response:
+  default: ["ticket.create(sla=15m)", "notify.sec_team"]
+triage: >
+  脚本解释器进程直接建立 TCP 外联（不经浏览器/更新代理）是下载器/C2 Beacon 的典型网络画像：
+  将目的 IP/端口送威胁情报比对；命中恶意指标后隔离主机并在防火墙封禁该出口。
+references:
+  - https://attack.mitre.org/techniques/T1071/

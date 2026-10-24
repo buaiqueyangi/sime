@@ -1,0 +1,24 @@
+id: rule.ot.dnp3-direct-operate
+name: DNP3 绕过选择-执行直控
+version: "1.0"
+status: stable
+author: sime-core
+domain: ot
+category: ot
+tactics: ["TA0104 影响"]
+techniques: ["T0855 未授权指令消息"]
+severity: critical
+detection:
+  source: adapter.ot.dnp3-audit
+  window: 1m
+  group_by: ["dst.asset_id"]
+  condition: "event.category == 'ics-command' and dnp3.function_code == '6'"
+  except: "src.asset.labels.role == 'scada-master'"
+response:
+  default: ["plc.deny(dst.asset_id)", "ticket.create(sla=5m)", "notify.ot_duty"]
+triage: >
+  DIRECT_OPERATE(6) 跳过 SELECT(3)-OPERATE(5) 的选择-执行确认链直接落控，
+  绕过五防/双令牌校验是典型非法遥控：冻结该控制点并核对
+  遥控回路 SOE 记录与调度端操作日志的一致性。
+references:
+  - https://attack.mitre.org/techniques/T0855/

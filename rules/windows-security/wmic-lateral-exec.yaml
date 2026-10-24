@@ -1,0 +1,22 @@
+id: rule.win.wmic-lateral-exec
+name: WMIC 远程进程创建（横向执行）
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: host-security
+tactics: ["TA0008 横向移动"]
+techniques: ["T1047 WMI 执行"]
+severity: critical
+detection:
+  source: adapter.generic.sysmon
+  window: 1m
+  group_by: ["src.asset_id"]
+  condition: "event.code == '1' and process.name matches '(?i)wmic\\.exe' and process.command_line matches '(?i)/node:'"
+response:
+  default: ["isolate.host(src.asset_id)", "ticket.create(sla=5m)", "notify.sec_team"]
+triage: >
+  wmic /node: 远程进程调用是横向移动经典通道（与 PTHT/口令喷洒组合）：
+  解析目标主机清单与远程命令内容，联动隔离源主机并检查目标主机安全日志中的 4648 登录。
+references:
+  - https://attack.mitre.org/techniques/T1047/
