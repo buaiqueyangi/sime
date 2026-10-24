@@ -1517,24 +1517,86 @@ $('ruleNew').onclick = () => openRuleEditor(null);
 
 async function openRuleEditor(rid) {
   const cur = rid ? await jget('/api/v1/rules/' + encodeURIComponent(rid)) : null;
-  const json = JSON.stringify(cur ?? RULE_TEMPLATE, null, 2);
-  const ta = document.createElement('textarea');
-  ta.value = json; ta.className = 'sqlbox'; ta.style.minHeight = '380px';
-  $('alertModalTitle').textContent = rid ? '编辑规则（Schema 校验通过才能保存）' : '新建规则（模板已填，改 id/condition 等）';
+  const d = cur ?? JSON.parse(JSON.stringify(RULE_TEMPLATE));
+  $('alertModalTitle').textContent = rid ? '编辑规则' : '新建规则';
   $('alertModalBody').innerHTML = '';
-  $('alertModalBody').appendChild(ta);
   ['alertAck', 'alertResolve', 'alertGoEvents'].forEach((i) => { const el = $(i); if (el) el.classList.add('hidden'); });
   $('alertModal').classList.add('open');
+
+  const F = (label, id, val, ph, ta) =>
+    `<div style="margin-bottom:8px"><label style="display:block;font-size:12px;color:var(--dim);margin-bottom:3px">${label}</label>${ta
+      ? `<textarea id="${id}" class="sqlbox" style="min-height:${ta}px">${esc(val)}</textarea>`
+      : `<input id="${id}" value="${esc(val)}" placeholder="${esc(ph)}" style="width:100%;background:#0d1526;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px">`}</div>`;
+  const det = d.detection || {};
+  const SEL = (label, id, val, opts) =>
+    `<div style="margin-bottom:8px"><label style="display:block;font-size:12px;color:var(--dim);margin-bottom:3px">${label}</label><select id="${id}" style="width:100%;background:#0d1526;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px 10px">${opts.map((o) => `<option ${o === val ? 'selected' : ''}>${o}</option>`).join('')}</select></div>`;
+
+  const form = document.createElement('div');
+  form.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>${F('规则 ID（rule.custom.xxx）', 'rf_id', d.id)}${F('名称', 'rf_name', d.name)}${SEL('级别', 'rf_sev', d.severity, ['info', 'low', 'medium', 'high', 'critical'])}${SEL('域', 'rf_domain', d.domain, ['it', 'ot', 'merged'])}${SEL('类别', 'rf_cat', d.category, ['host-security', 'windows-security', 'network-security', 'web', 'vpn', 'email', 'identity', 'ot', 'ueba', 'compliance', 'container', 'edge-security'])}</div>
+      <div>${F('ATT&CK 战术（逗号分隔）', 'rf_tac', (d.tactics || []).join(', '), 'TA0006 凭证访问')}${F('ATT&CK 技术（逗号分隔）', 'rf_tec', (d.techniques || []).join(', '), 'T1110 密码猜解')}${F('数据源', 'rf_src', det.source || '', 'event.security.auth')}${F('窗口', 'rf_win', det.window || '5m', '如 1m / 5m / 1h')}${F('分组字段（逗号分隔）', 'rf_gb', (det.group_by || []).join(', '), 'src.ip')}</div>
+    </div>
+    ${F('检测条件（DSL）', 'rf_cond', det.condition || '', "event.category == 'authentication' and count() >= 10", 70)}
+    ${F('研判说明（值班第一眼要看的）', 'rf_triage', d.triage || '', '怎么判断、怎么处置', 80)}
+    ${F('响应动作（每行一个）', 'rf_resp', ((d.response || {}).default || []).join('
+'), 'ticket.create
+notify.sec_team', 60)}`;
+  $('alertModalBody').appendChild(form);
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;gap:8px;margin-top:10px';
+  const save = document.createElement('button');
+  save.className = 'btn primary'; save.textContent = rid ? '保存（热生效）' : '创建（热生效）';
+  const jsonBtn = document.createElement('button');
+  jsonBtn.className = 'btn ghost'; jsonBtn.textContent = 'JSON 模式';
+  bar.appendChild(save); bar.appendChild(jsonBtn);
+  $('alertModalBody').appendChild(bar);
+
+  save.onclick = async () => {
+    const def = {
+      id: $('rf_id').value.trim(), name: $('rf_name').value.trim(), version: String(d.version || '1.0'), status: 'stable',
+      author: 'console', domain: $('rf_domain').value, category: $('rf_cat').value, severity: $('rf_sev').value,
+      tactics: $('rf_tac').value.split(',').map((x) => x.trim()).filter(Boolean),
+      techniques: $('rf_tec').value.split(',').map((x) => x.trim()).filter(Boolean),
+      detection: {
+        source: $('rf_src').value.trim(), window: $('rf_win').value.trim() || '5m',
+        group_by: $('rf_gb').value.split(',').map((x) => x.trim()).filter(Boolean),
+        condition: $('rf_cond').value.trim(),
+      },
+      response: { default: $('rf_resp').value.split('
+').map((x) => x.trim()).filter(Boolean) },
+      triage: $('rf_triage').value,
+      references: d.references || [],
+    };
+    if (!def.id || !def.name || !def.detection.condition || def.triage.length < 20) {
+      toast('id/名称/条件必填，研判说明至少 20 字', true); return;
+    }
+    try {
+      await (rid
+        ? jget(`/api/v1/rules/${rid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) })
+        : jget('/api/v1/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) }));
+      toast('已保存并热生效（全分片 ≤15s）');
+      closeAlertModal(); refreshRules();
+    } catch (e) { toast('保存失败: ' + e.message, true); }
+  };
+  jsonBtn.onclick = () => jsonRuleEditor(rid, cur);
+}
+
+/** JSON 高级模式（原编辑器）。 */
+function jsonRuleEditor(rid, cur) {
+  const ta = document.createElement('textarea');
+  ta.value = JSON.stringify(cur ?? RULE_TEMPLATE, null, 2); ta.className = 'sqlbox'; ta.style.minHeight = '380px';
+  $('alertModalBody').innerHTML = ''; $('alertModalBody').appendChild(ta);
   const save = document.createElement('button');
   save.className = 'btn primary'; save.textContent = '保存（热生效）'; save.style.marginTop = '10px';
   save.onclick = async () => {
     try {
       const def = JSON.parse(ta.value);
-      const r = rid
-        ? await jget(`/api/v1/rules/${rid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) })
-        : await jget('/api/v1/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) });
-      toast('已保存并热生效（全分片 ≤15s）');
-      closeAlertModal(); refreshRules();
+      await (rid
+        ? jget(`/api/v1/rules/${rid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) })
+        : jget('/api/v1/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) }));
+      toast('已保存并热生效'); closeAlertModal(); refreshRules();
     } catch (e) { toast('保存失败: ' + e.message, true); }
   };
   $('alertModalBody').appendChild(save);
