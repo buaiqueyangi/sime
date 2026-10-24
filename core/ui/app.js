@@ -68,7 +68,7 @@ function toast(msg, isErr = false) {
 }
 
 /* ===== 视图切换 ===== */
-const TITLES = { overview: '概览', alerts: '实时告警', events: '事件检索', query: '安全查询', telemetry: '设备遥测', topology: '组态总览', rules: '检测规则库', catalog: '适配与物模型', response: '处置闭环', lake: '数据湖', assistant: 'AI 助手' };
+const TITLES = { overview: '概览', alerts: '实时告警', events: '事件检索', query: '安全查询', telemetry: '设备遥测', topology: '组态总览', rules: '检测规则库', agents: 'Agent 管理', catalog: '适配与物模型', response: '处置闭环', lake: '数据湖', assistant: 'AI 助手' };
 let currentView = 'overview';
 
 function showView(v) {
@@ -1389,3 +1389,28 @@ $('parseBtn').onclick = async () => {
     box.innerHTML = `<p class="note" style="color:var(--crit);padding:8px 4px">${esc(e.message)}</p>`;
   }
 };
+
+/* ===== Agent 家族台账（多类型 Agent 接入） ===== */
+const AGENT_TYPE_LABEL = { host: '主机防护', edge: '边缘 OT 网关', log: '日志转发', net: '网络探针', cloud: '云原生采集', scan: '合规扫描', external: '第三方设备', sim: '模拟器', legacy: '未标注' };
+
+async function refreshAgents() {
+  if (currentView !== 'agents') return;
+  try {
+    const r = await jget('/api/v1/agents');
+    const types = Object.entries(r.byType || {});
+    $('agentCards').innerHTML = types.length
+      ? types.map(([t, s]) => `<div class="card"><div class="v">${s.online}<span class="dim" style="font-size:14px"> / ${s.total}</span></div><div class="k">${esc(AGENT_TYPE_LABEL[t] ?? t)}</div></div>`).join('')
+      : '<div class="card"><div class="v">0</div><div class="k">尚无 Agent 接入</div></div>';
+    $('agentRows').innerHTML = (r.agents || []).length
+      ? r.agents.map((a) => `<tr>
+          <td class="mono">${esc(a.deviceId)}<div class="dim mono">${esc(a.assetId)}</div></td>
+          <td><span class="tag ${a.type === 'host' ? 'ot' : a.type === 'edge' ? 'it' : 'info'}">${esc(AGENT_TYPE_LABEL[a.type] ?? a.type)}</span></td>
+          <td class="mono">${esc(a.version)}</td>
+          <td class="dim mono">${esc((a.capabilities || []).join(' ')) || '-'}</td>
+          <td><span class="tag ${a.online ? 'low' : 'high'}">${a.online ? '在线' : '离线'}</span></td>
+          <td class="dim">${rel(a.lastSeen)}</td></tr>`).join('')
+      : '<tr><td colspan="6" class="empty">暂无 Agent —— 遥测携带 agent 元数据即自动注册（见 docs/agent-family.md）</td></tr>';
+  } catch (e) {
+    $('agentRows').innerHTML = `<tr><td colspan="6" class="empty">加载失败: ${esc(e.message)}</td></tr>`;
+  }
+}

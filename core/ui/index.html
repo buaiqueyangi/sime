@@ -37,6 +37,7 @@
       <a data-view="telemetry"><svg viewBox="0 0 24 24"><path d="M4 20V10m5 10V4m5 16v-7m5 7V8" stroke-width="2.4" stroke-linecap="round" fill="none" class="stroke"/></svg>设备遥测</a>
       <a data-view="topology"><svg viewBox="0 0 24 24"><path d="M3 3h6v6H3zM15 3h6v6h-6zM9 15h6v6H9zM6 9v3h12V9M12 9v6" stroke-width="1.8" fill="none" class="stroke"/></svg>组态总览</a>
       <a data-view="rules"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z"/></svg>检测规则库</a>
+      <a data-view="agents"><svg viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h16v6H4z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="7" cy="7" r="1"/><circle cx="7" cy="17" r="1"/></svg>Agent 管理</a>
       <a data-view="catalog"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>适配与物模型</a>
       <a data-view="response"><svg viewBox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.2 9 19.2 20 8.2l-1.5-1.5z"/></svg>处置闭环</a>
       <a data-view="lake"><svg viewBox="0 0 24 24" class="strokeic"><path d="M2 7c0-2.8 4.5-5 10-5s10 2.2 10 5-4.5 5-10 5S2 9.8 2 7zm0 5c0 2.8 4.5 5 10 5s10-2.2 10-5M2 17c0 2.8 4.5 5 10 5s10-2.2 10-5"/></svg>数据湖</a>
@@ -209,6 +210,18 @@
           <table>
             <thead><tr><th>规则 ID</th><th>名称</th><th>域</th><th>类别</th><th>级别</th><th>MITRE ATT&CK</th></tr></thead>
             <tbody id="rules"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Agent 管理 -->
+      <section id="view-agents" class="view">
+        <div class="cards" id="agentCards"></div>
+        <div class="panel">
+          <div class="panel-head"><h2>Agent 台账</h2><span class="note">在线判定：120s 内有心跳 · 类型契约见 docs/agent-family.md</span></div>
+          <table>
+            <thead><tr><th>设备 ID</th><th>类型</th><th>版本</th><th>能力</th><th>状态</th><th>最近心跳</th></tr></thead>
+            <tbody id="agentRows"><tr><td colspan="6" class="empty">加载中…</td></tr></tbody>
           </table>
         </div>
       </section>

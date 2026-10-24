@@ -29,7 +29,7 @@ export class TelemetryService {
   private readonly logger = new Logger('Telemetry');
   private latestMap = new Map<string, { ts: number; value: number }>();
   private seriesMap = new Map<string, { ts: number; value: number }[]>();
-  private deviceMap = new Map<string, { assetId: string; kind: string; firstSeen: number; lastSeen: number }>();
+  private deviceMap = new Map<string, { assetId: string; kind: string; firstSeen: number; lastSeen: number; agentType?: string; agentVersion?: string }>();
   private rangeMap = new Map<string, PointRange>();
 
   constructor(
@@ -92,13 +92,15 @@ export class TelemetryService {
     }
   }
 
-  registerDevice(deviceId: string, assetId: string, kind = 'device'): void {
+  registerDevice(deviceId: string, assetId: string, kind = 'device', agent?: { type?: string; version?: string; capabilities?: string[] }): void {
     const prev = this.deviceMap.get(deviceId);
     this.deviceMap.set(deviceId, {
       assetId,
       kind,
       firstSeen: prev?.firstSeen ?? Date.now(),
       lastSeen: Date.now(),
+      agentType: agent?.type,
+      agentVersion: agent?.version,
     });
     const db = this.pg.database;
     if (db) {
@@ -108,10 +110,25 @@ export class TelemetryService {
         .onConflict((oc) => oc.column('id').doNothing())
         .execute()
         .catch(() => undefined);
+      // Agent 元数据（docs/agent-family.md 统一契约）：心跳随 telemetry 上报，UPSERT 更新
       void db
         .insertInto('devices')
-        .values({ id: deviceId, asset_id: assetId })
-        .onConflict((oc) => oc.column('id').doNothing())
+        .values({
+          id: deviceId,
+          asset_id: assetId,
+          agent_type: agent?.type ?? null,
+          agent_version: agent?.version ?? null,
+          capabilities: JSON.stringify(agent?.capabilities ?? []),
+          last_seen_at: new Date(),
+        })
+        .onConflict((oc) =>
+          oc.column('id').doUpdateSet({
+            last_seen_at: new Date(),
+            ...(agent?.type ? { agent_type: agent.type } : {}),
+            ...(agent?.version ? { agent_version: agent.version } : {}),
+            ...(agent?.capabilities ? { capabilities: JSON.stringify(agent.capabilities) } : {}),
+          }),
+        )
         .execute()
         .catch(() => undefined);
     }
@@ -122,7 +139,8 @@ export class TelemetryService {
   /** 分片接入入口：登记台账 + 解析测点 + 记录（含量程/UEBA 检查），主进程或 worker 均可调用。 */
   ingest(deviceId: string, body: Record<string, unknown>, ts: number): void {
     const assetId = String(body['asset_id'] ?? deviceId);
-    this.registerDevice(deviceId, assetId, String(body['kind'] ?? 'device'));
+    const agent = body['agent'] as { type?: string; version?: string; capabilities?: string[] } | undefined;
+    this.registerDevice(deviceId, assetId, String(body['kind'] ?? 'device'), agent);
     const pts: TelemetryPoint[] = [];
     const points = body['points'] as Record<string, unknown> | undefined;
     if (points && typeof points === 'object') {
@@ -257,10 +275,10 @@ export class TelemetryService {
     return merged.slice(-limit);
   }
 
-  async devices(): Promise<{ deviceId: string; assetId: string; kind: string; lastSeen: number }[]> {
+  async devices(): Promise<{ deviceId: string; assetId: string; kind: string; lastSeen: number; agentType?: string; agentVersion?: string }[]> {
     if (this.deviceMap.size) {
       return [...this.deviceMap.entries()]
-        .map(([deviceId, d]) => ({ deviceId, assetId: d.assetId, kind: d.kind, lastSeen: d.lastSeen }))
+        .map(([deviceId, d]) => ({ deviceId, assetId: d.assetId, kind: d.kind, lastSeen: d.lastSeen, agentType: d.agentType, agentVersion: d.agentVersion }))
         .sort((a, b) => b.lastSeen - a.lastSeen);
     }
     const db = this.pg.database;
@@ -269,6 +287,8 @@ export class TelemetryService {
       id: string;
       asset_id: string;
       last_seen_at: string | Date | null;
+      agent_type: string | null;
+      agent_version: string | null;
     }[];
     const assetIds = [...new Set(devs.map((d) => d.asset_id))];
     const assets = assetIds.length
@@ -280,6 +300,64 @@ export class TelemetryService {
       assetId: d.asset_id,
       kind: typeById.get(d.asset_id) ?? 'device',
       lastSeen: d.last_seen_at ? new Date(d.last_seen_at).getTime() : 0,
+      agentType: d.agent_type ?? undefined,
+      agentVersion: d.agent_version ?? undefined,
     }));
   }
+
+  /**
+   * Agent 家族台账（docs/agent-family.md）：按类型分组的在线/离线清单。
+   * 在线判定：120s 内有心跳（last_seen_at）。无 agent_type 的旧设备归为 legacy。
+   */
+  async agents(): Promise<{
+    byType: Record<string, { total: number; online: number }>;
+    agents: { deviceId: string; assetId: string; type: string; version: string; capabilities: string[]; lastSeen: number; online: boolean }[];
+  }> {
+    const db = this.pg.database;
+    const ONLINE_MS = 120_000;
+    const now = Date.now();
+    if (!db) {
+      const list = [...this.deviceMap.entries()].map(([deviceId, d]) => ({
+        deviceId,
+        assetId: d.assetId,
+        type: d.agentType ?? 'legacy',
+        version: d.agentVersion ?? '-',
+        capabilities: [] as string[],
+        lastSeen: d.lastSeen,
+        online: now - d.lastSeen < ONLINE_MS,
+      }));
+      return { byType: groupByType(list), agents: list.sort((a, b) => b.lastSeen - a.lastSeen) };
+    }
+    const devs = (await db.selectFrom('devices').selectAll().limit(2000).execute()) as unknown as {
+      id: string;
+      asset_id: string;
+      agent_type: string | null;
+      agent_version: string | null;
+      capabilities: string[] | null;
+      last_seen_at: string | Date | null;
+    }[];
+    const list = devs.map((d) => {
+      const lastSeen = d.last_seen_at ? new Date(d.last_seen_at).getTime() : 0;
+      return {
+        deviceId: d.id,
+        assetId: d.asset_id,
+        type: d.agent_type ?? 'legacy',
+        version: d.agent_version ?? '-',
+        capabilities: d.capabilities ?? [],
+        lastSeen,
+        online: now - lastSeen < ONLINE_MS,
+      };
+    });
+    return { byType: groupByType(list), agents: list.sort((a, b) => b.lastSeen - a.lastSeen) };
+  }
+}
+
+function groupByType(list: { type: string; online: boolean }[]): Record<string, { total: number; online: number }> {
+  const byType: Record<string, { total: number; online: number }> = {};
+  for (const a of list) {
+    const t = (byType[a.type] ??= { total: 0, online: 0 });
+    t.total++;
+    if (a.online) t.online++;
+  }
+  return byType;
 }

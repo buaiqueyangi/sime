@@ -9,6 +9,7 @@ import { AlertsController } from './modules/alerts/alerts.controller';
 import { PipelineController } from './modules/pipeline/pipeline.controller';
 import { ResponsesController } from './modules/responses/responses.controller';
 import { TelemetryController } from './telemetry/telemetry.controller';
+import { AgentsController } from './modules/agents/agents.controller';
 import { TelemetryService } from './telemetry/telemetry.service';
 import { MqttIngestService } from './ingest/mqtt-ingest.service';
 import { ResponseService } from './response/response.service';
@@ -47,6 +48,7 @@ import { ImportService } from './ingest/import.service';
     AlertsController,
     PipelineController,
     TelemetryController,
+    AgentsController,
     ResponsesController,
     AuthController,
     PlaybooksController,

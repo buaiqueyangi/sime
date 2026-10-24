@@ -80,6 +80,10 @@ interface AssetsRow {
 interface DevicesRow {
   id: string;
   asset_id: string;
+  agent_type: string | null;
+  agent_version: string | null;
+  capabilities: string | null; // jsonb：写入侧 JSON.stringify（pg 驱动读侧自动反序列化）
+  last_seen_at: Date | null;
 }
 interface RulesRow {
   id: string;
