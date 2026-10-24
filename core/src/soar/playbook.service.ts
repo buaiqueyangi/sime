@@ -17,6 +17,7 @@ interface PlaybookDef {
   id: string;
   name: string;
   version: string;
+  status?: string;
   trigger: { rules: string[] };
   steps: string[];
 }
@@ -62,7 +63,59 @@ export class PlaybookService implements OnModuleInit {
         this.logger.warn(`playbook load failed ${f}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    this.logger.log(`playbooks loaded: ${this.playbooks.length}`);
+    this.logger.log(`playbooks loaded: ${this.playbooks.length} (files)`);
+    void this.mergeDb();
+    this.startVersionPoll();
+  }
+
+  /** DB 合并：custom 追加 + builtin 禁用剔除 + custom 禁用剔除。 */
+  private async mergeDb(): Promise<void> {
+    const db = (this.pg as any).database;
+    if (!db) return;
+    try {
+      const rows = (await db.selectFrom('playbooks').select(['id', 'name', 'version', 'status', 'trigger', 'steps', 'source']).execute()) as Record<string, unknown>[];
+      const disabled = new Set(rows.filter((r) => r.status === 'disabled' || r.status === 'deprecated').map((r) => String(r.id)));
+      this.playbooks = this.playbooks.filter((p) => !disabled.has(p.id)); // builtin 禁用剔除
+      for (const r of rows) {
+        if (r.source !== 'custom' || disabled.has(String(r.id))) continue;
+        this.playbooks.push({
+          id: String(r.id), name: String(r.name), version: String(r.version), status: String(r.status),
+          trigger: r.trigger as { rules: string[] }, steps: r.steps as string[],
+        });
+      }
+      this.logger.log(`playbooks merged: ${this.playbooks.length} (+${rows.filter((r) => r.source === 'custom').length} custom)`);
+    } catch (e) {
+      this.logger.warn(`playbooks DB 合并失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  private pbVersion = '';
+  private startVersionPoll(): void {
+    const db = (this.pg as any).database;
+    if (!db) return;
+    const poll = async () => {
+      try {
+        const rows = (await db.selectFrom('config').select('value').where('key', '=', 'playbooks.version').execute()) as { value: unknown }[];
+        const v = JSON.stringify(rows[0]?.value ?? '');
+        if (this.pbVersion && v !== this.pbVersion) {
+          this.logger.log(`剧本版本变化 → 热重载`);
+          this.load();
+        }
+        this.pbVersion = v;
+      } catch { /* 忽略 */ }
+    };
+    void poll();
+    setInterval(() => void poll(), 15_000).unref();
+  }
+
+  /** 写操作后 bump：本进程立即重载，其余分片 ≤15s。 */
+  async bumpVersion(): Promise<void> {
+    const db = (this.pg as any).database;
+    if (!db) return;
+    const now = JSON.stringify(String(Date.now()));
+    await (db as any).insertInto('config').values({ key: 'playbooks.version', value: now })
+      .onConflict((oc: any) => oc.column('key').doUpdateSet({ value: now, updated_at: new Date() })).execute();
+    this.load();
   }
 
   private async handle(alert: SimeAlert, alertId: number | null): Promise<void> {
@@ -83,6 +136,27 @@ export class PlaybookService implements OnModuleInit {
       }
       this.logger.log(`playbook ${pb.id} executed for ${alert.ruleId}`);
     }
+  }
+
+  async listWithMeta(): Promise<{ id: string; name: string; version: string; rules: string[]; steps: string[]; runs: number; source: string; status: string }[]> {
+    const db = (this.pg as any).database;
+    let meta = new Map<string, { source?: string; status?: string }>();
+    if (db) {
+      try {
+        const rows = (await db.selectFrom('playbooks').select(['id', 'source', 'status']).execute()) as Record<string, string>[];
+        meta = new Map(rows.map((r) => [r.id, { source: r.source, status: r.status }]));
+      } catch { /* 忽略 */ }
+    }
+    return this.playbooks.map((p) => {
+      const m = meta.get(p.id) ?? {};
+      return {
+        id: p.id, name: p.name, version: p.version,
+        rules: p.trigger.rules, steps: p.steps,
+        runs: this.runs.filter((r) => r.playbookId === p.id).length,
+        source: m.source === 'custom' ? 'custom' : 'builtin',
+        status: m.status === 'disabled' ? 'disabled' : (p.status ?? 'stable'),
+      };
+    });
   }
 
   list(): { id: string; name: string; version: string; rules: string[]; steps: string[]; runs: number }[] {

@@ -476,8 +476,29 @@ async function refreshResponses() {
           <td>${esc(p.name)}<div class="dim mono">${esc(p.id)}</div></td>
           <td class="mono">${esc(p.rules.join('<br>'))}</td>
           <td class="dim mono">${esc(p.steps.join(' → '))}</td>
-          <td>${p.runs}</td></tr>`).join('')
-      : '<tr><td colspan="4" class="empty">无剧本</td></tr>';
+          <td>${p.runs}</td>
+          <td><span class="tag ${p.source === 'custom' ? 'merged' : 'info'}">${esc(p.source)}</span>${p.status === 'disabled' ? ' <span class="tag critical">禁用</span>' : ''}</td>
+          <td>
+            <button class="mini" data-pact="toggle" data-pid="${esc(p.id)}" data-st="${p.status === 'disabled' ? 'stable' : 'disabled'}">${p.status === 'disabled' ? '启用' : '禁用'}</button>
+            ${p.source === 'custom' ? `<button class="mini resolve" data-pact="del" data-pid="${esc(p.id)}">删除</button>` : ''}
+          </td></tr>`).join('')
+      : '<tr><td colspan="6" class="empty">无剧本</td></tr>';
+    document.querySelectorAll('[data-pact]').forEach((b) => {
+      b.onclick = async () => {
+        const pid = b.dataset.pid;
+        try {
+          if (b.dataset.pact === 'toggle') {
+            await jget(`/api/v1/playbooks/${pid}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: b.dataset.st }) });
+            toast(`剧本 ${pid} 已${b.dataset.st === 'disabled' ? '禁用' : '启用'}（热生效）`);
+          } else if (b.dataset.pact === 'del') {
+            if (!confirm(`删除自定义剧本 ${pid}？`)) return;
+            await jget(`/api/v1/playbooks/${pid}`, { method: 'DELETE' });
+            toast(`剧本 ${pid} 已删除`);
+          }
+          refreshResponses();
+        } catch (e) { toast('操作失败: ' + e.message, true); }
+      };
+    });
     $('rTickets').innerHTML = (r.tickets || []).length
       ? r.tickets.map((t) => `<tr><td>${esc(t.title)}</td>
           <td><span class="tag ${t.state === 'closed' ? 'low' : 'medium'}">${esc(t.state)}</span></td>
