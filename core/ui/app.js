@@ -433,7 +433,7 @@ async function refreshRules() {
 
 function renderRules() {
   const list = ruleDomain === 'all' ? allRules : allRules.filter((x) => x.domain === ruleDomain);
-  $('rules').innerHTML = list.map((x) => `<tr>
+  $('rules').innerHTML = list.map((x) => `<tr class="rule-row" data-ruleid="${esc(x.id)}" style="cursor:pointer" title="点击查看完整定义">
     <td class="mono">${esc(x.id)}</td><td>${esc(x.name)}</td>
     <td><span class="tag ${esc(x.domain)}">${esc(x.domain)}</span></td>
     <td class="dim">${esc(x.category)}</td>
@@ -1299,7 +1299,10 @@ $('qlText').addEventListener('input', qlSyncSourceSelect);
 
 /* ===== 启动 ===== */
 if (!localStorage.getItem('sime_token')) showLogin(true);
-refreshRules().then(() => { if (currentView === 'rules') renderRules(); });
+refreshRules().then(() => { if (currentView === 'rules') renderRules();
+  document.querySelectorAll('.rule-row').forEach((r) => {
+    r.onclick = () => openRuleDetail(r.dataset.ruleid);
+  }); });
 refreshCatalog();
 refreshHealth();
 refreshAlerts();
@@ -1414,4 +1417,39 @@ async function refreshAgents() {
   } catch (e) {
     $('agentRows').innerHTML = `<tr><td colspan="6" class="empty">加载失败: ${esc(e.message)}</td></tr>`;
   }
+}
+
+/* ===== 规则详情弹窗（复用告警弹窗容器，无告警字段时展示规则六要素） ===== */
+async function openRuleDetail(ruleId) {
+  try {
+    const d = await jget('/api/v1/rules/' + encodeURIComponent(ruleId));
+    const det = d.detection || {};
+    const cond = [
+      det.source ? 'source:     ' + det.source : '',
+      det.window ? 'window:     ' + det.window : '',
+      Array.isArray(det.group_by) && det.group_by.length ? 'group_by:   ' + det.group_by.join(', ') : '',
+      det.condition ? 'condition:  ' + det.condition : '',
+      det.threshold ? 'threshold:  ' + JSON.stringify(det.threshold) : '',
+      det.except ? 'except:     ' + det.except : '',
+    ].filter(Boolean).join('\n');
+    const body = `
+      <dl class="kv">
+        <dt>规则</dt><dd>${esc(d.name)} <span class="dim mono">(${esc(d.id)} v${esc(d.version)})</span></dd>
+        <dt>域 / 类别</dt><dd><span class="tag ${esc(d.domain)}">${esc(d.domain)}</span> ${esc(d.category)}</dd>
+        <dt>级别</dt><dd><span class="tag ${esc(d.severity)}">${esc(d.severity)}</span> · 状态 ${esc(d.status)}</dd>
+      </dl>
+      <div class="sec"><h3 class="sec-title">检测逻辑</h3><div class="jsonbox">${esc(cond || '—')}</div></div>
+      ${d.triage ? `<div class="sec"><h3 class="sec-title">研判指引</h3><p>${esc(d.triage)}</p></div>` : ''}
+      ${(d.response && d.response.default || []).length ? `<div class="sec"><h3 class="sec-title">响应动作</h3><div class="taglist">${d.response.default.map((a) => `<span class="tag info mono">${esc(a)}</span>`).join('')}</div></div>` : ''}
+      ${((d.tactics || []).concat(d.techniques || [])).length ? `<div class="sec"><h3 class="sec-title">ATT&amp;CK</h3><div class="taglist">${(d.tactics || []).concat(d.techniques || []).map((t) => `<span class="tag medium">${esc(t)}</span>`).join('')}</div></div>` : ''}
+      ${(d.references || []).length ? `<div class="sec"><h3 class="sec-title">参考</h3><ul class="reflist">${d.references.map((r) => { const u = /^https?:/.test(r) ? r : ''; return `<li>${u ? `<a href="${esc(u)}" target="_blank" rel="noreferrer">${esc(r)}</a>` : esc(r)}</li>`; }).join('')}</ul></div>` : ''}
+      ${d.file ? `<p class="note mono">规则文件：${esc(d.file)}</p>` : ''}`;
+    $('alertModalTitle').textContent = '规则详情';
+    $('alertModalBody').innerHTML = body;
+    ['alertAck', 'alertResolve', 'alertGoEvents'].forEach((i) => { const el = $(i); if (el) el.classList.add('hidden'); });
+    $('alertModal').classList.add('open');
+    // 关闭时恢复被隐藏的告警操作按钮（弹窗容器为告警/规则共用）
+    const origClose = $('alertModalClose').onclick;
+    $('alertModalClose').onclick = () => { origClose && origClose(); closeAlertModal(); ['alertAck', 'alertResolve', 'alertGoEvents'].forEach((i) => { const el = $(i); if (el) el.classList.remove('hidden'); }); };
+  } catch (e) { toast('规则详情加载失败: ' + e.message, true); }
 }

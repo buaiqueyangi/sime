@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AssetRegistryService } from '../../common/asset-registry.service';
 
@@ -20,6 +20,14 @@ export class RulesController {
       status: data['status'],
       file,
     }));
+  }
+
+  /** 规则全量定义（六要素）：控制台规则详情弹窗用。 */
+  @Get(':id')
+  detail(@Param('id') id: string) {
+    const entry = this.registry.get('rules').entries.find(({ data }) => data['id'] === id);
+    if (!entry) throw new NotFoundException(`规则不存在: ${id}`);
+    return { ...entry.data, file: entry.file };
   }
 
   @Get('stats')
