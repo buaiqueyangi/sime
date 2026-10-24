@@ -1610,27 +1610,52 @@ const PB_TEMPLATE = {
 };
 $('pbNew').onclick = () => openPbEditor(null);
 
+const PB_ACTIONS = ['ticket.create', 'notify.sec_team', 'notify.ot_duty', 'notify.owner', 'notify.net_admin', 'account.lock', 'account.unlock', 'firewall.block', 'firewall.unblock', 'process.kill', 'file.quarantine', 'isolate.host', 'isolate.remove'];
+
 async function openPbEditor(pid) {
-  const list = await jget('/api/v1/playbooks');
+  const [list, rules] = await Promise.all([jget('/api/v1/playbooks'), refreshRules().then(() => allRules)]);
   const cur = pid ? list.playbooks.find((p) => p.id === pid) : null;
-  const editable = cur ? { id: cur.id, name: cur.name, version: cur.version, status: cur.status, trigger: { rules: cur.rules }, steps: cur.steps } : PB_TEMPLATE;
-  const ta = document.createElement('textarea');
-  ta.value = JSON.stringify(editable, null, 2); ta.className = 'sqlbox'; ta.style.minHeight = '300px';
-  $('alertModalTitle').textContent = pid ? '编辑剧本（custom）' : '新建剧本（触发规则须 rule.* / steps 为动作数组）';
-  $('alertModalBody').innerHTML = ''; $('alertModalBody').appendChild(ta);
+  const d = cur ? { id: cur.id, name: cur.name, version: cur.version, status: cur.status, rules: cur.rules, steps: cur.steps } : { ...PB_TEMPLATE };
+  $('alertModalTitle').textContent = pid ? '编辑剧本' : '新建剧本';
+  $('alertModalBody').innerHTML = '';
   ['alertAck', 'alertResolve', 'alertGoEvents'].forEach((i) => { const el = $(i); if (el) el.classList.add('hidden'); });
   $('alertModal').classList.add('open');
+
+  const IN = (label, id, val, ph) => `<div style="margin-bottom:8px"><label style="display:block;font-size:12px;color:var(--dim);margin-bottom:3px">${label}</label><input id="${id}" value="${esc(val)}" placeholder="${esc(ph)}" style="width:100%;background:#0d1526;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px"></div>`;
+  const form = document.createElement('div');
+  form.innerHTML = `
+    ${IN('剧本 ID（pb.custom.xxx）', 'pf_id', d.id)}
+    ${IN('名称', 'pf_name', d.name)}
+    <div style="margin-bottom:8px"><label style="display:block;font-size:12px;color:var(--dim);margin-bottom:3px">触发规则（多选，勾选即绑定）</label>
+      <div id="pf_rules" style="max-height:180px;overflow-y:auto;background:#0d1526;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12.5px">
+        ${rules.map((r) => `<label style="display:flex;gap:8px;align-items:center;padding:2px 0;cursor:pointer"><input type="checkbox" value="${esc(r.id)}" ${(d.rules || []).includes(r.id) ? 'checked' : ''} style="accent-color:#4f8cff"><span class="mono">${esc(r.id)}</span><span class="dim"> — ${esc(r.name)}</span></label>`).join('')}
+      </div></div>
+    <div style="margin-bottom:8px"><label style="display:block;font-size:12px;color:var(--dim);margin-bottom:3px">执行动作（按顺序，勾选追加）</label>
+      <div id="pf_steps" style="display:flex;flex-wrap:wrap;gap:6px">
+        ${PB_ACTIONS.map((a) => `<label style="display:flex;gap:5px;align-items:center;background:#0d1526;border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-size:12px;cursor:pointer"><input type="checkbox" value="${a}" ${(d.steps || []).includes(a) ? 'checked' : ''} style="accent-color:#4f8cff"><span class="mono">${a}</span></label>`).join('')}
+      </div></div>
+    <div style="margin:8px 0"><label style="display:block;font-size:12px;color:var(--dim);margin-bottom:3px">自定义动作（逗号分隔，如 plc.deny(dst.asset_id)）</label><input id="pf_extra" value="${esc((d.steps || []).filter((x) => !PB_ACTIONS.includes(x)).join(', '))}" placeholder="留空则无" style="width:100%;background:#0d1526;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:13px"></div>`;
+  $('alertModalBody').appendChild(form);
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;gap:8px;margin-top:10px';
   const save = document.createElement('button');
-  save.className = 'btn primary'; save.textContent = '保存（热生效）'; save.style.marginTop = '10px';
+  save.className = 'btn primary'; save.textContent = pid ? '保存（热生效）' : '创建（热生效）';
+  bar.appendChild(save);
+  $('alertModalBody').appendChild(bar);
+
   save.onclick = async () => {
+    const selRules = [...document.querySelectorAll('#pf_rules input:checked')].map((x) => x.value);
+    const selSteps = [...document.querySelectorAll('#pf_steps input:checked')].map((x) => x.value);
+    const extra = $('pf_extra').value.split(',').map((x) => x.trim()).filter(Boolean);
+    const def = { id: $('pf_id').value.trim(), name: $('pf_name').value.trim(), version: String(d.version || '1.0'), status: 'stable',
+      trigger: { rules: selRules }, steps: [...selSteps, ...extra] };
+    if (!def.id || !def.name || !selRules.length || !def.steps.length) { toast('id/名称必填，至少选一个触发规则和动作', true); return; }
     try {
-      const def = JSON.parse(ta.value);
-      const r = pid
-        ? await jget(`/api/v1/playbooks/${pid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) })
-        : await jget('/api/v1/playbooks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) });
-      toast('剧本已保存并热生效（全分片 ≤15s）');
-      closeAlertModal(); refreshResponses();
+      await (pid
+        ? jget(`/api/v1/playbooks/${pid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) })
+        : jget('/api/v1/playbooks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(def) }));
+      toast('剧本已保存并热生效'); closeAlertModal(); refreshResponses();
     } catch (e) { toast('保存失败: ' + e.message, true); }
   };
-  $('alertModalBody').appendChild(save);
 }
