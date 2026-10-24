@@ -150,6 +150,32 @@ export class RulesController {
     return { ok: true, id };
   }
 
+  /** 规则命中统计：24h/累计告警数排行（噪声识别 + 调优先导指标）。 */
+  @Get('hitstats')
+  async hitstats() {
+    const db: any = this.pg.database;
+    if (!db) return { rows: [] };
+    const rows = (await db
+      .selectFrom('alerts')
+      .select((eb: any) => ['rule_id', eb.fn.countAll().as('total')])
+      .groupBy('rule_id')
+      .execute()) as { rule_id: string; total: number | bigint }[];
+    const recent = (await db
+      .selectFrom('alerts')
+      .select((eb: any) => ['rule_id', eb.fn.countAll().as('h24')])
+      .where('ts', '>', new Date(Date.now() - 24 * 3600 * 1000))
+      .groupBy('rule_id')
+      .execute()) as { rule_id: string; h24: number | bigint }[];
+    const h24map = new Map(recent.map((r) => [r.rule_id, Number(r.h24)]));
+    const nameById = new Map(this.registry.get('rules').entries.map(({ data }) => [String(data['id']), String(data['name'])]));
+    return {
+      rows: rows
+        .map((r) => ({ ruleId: r.rule_id, name: nameById.get(r.rule_id) ?? r.rule_id, total: Number(r.total), h24: h24map.get(r.rule_id) ?? 0 }))
+        .sort((a: any, b: any) => b.h24 - a.h24 || b.total - a.total)
+        .slice(0, 20),
+    };
+  }
+
   @Get()
   async list() {
     const builtin: any[] = this.registry.get('rules').entries.map(({ file, data }) => ({

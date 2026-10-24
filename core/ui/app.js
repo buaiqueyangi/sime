@@ -428,6 +428,7 @@ let allRules = [];
 async function refreshRules() {
   allRules = await jget('/api/v1/rules');
   renderRules();
+  refreshHitStats();
   $('ruleCount').textContent = `共 ${allRules.length} 条（ATT&CK 全映射 · 目标 3000+）`;
 }
 
@@ -1678,4 +1679,29 @@ async function openPbEditor(pid) {
       toast('剧本已保存并热生效'); closeAlertModal(); refreshResponses();
     } catch (e) { toast('保存失败: ' + e.message, true); }
   };
+}
+
+/* ===== 规则命中排行（噪声识别） ===== */
+async function refreshHitStats() {
+  if (currentView !== 'rules') return;
+  try {
+    const r = await jget('/api/v1/rules/hitstats');
+    const rows = r.rows || [];
+    const max = Math.max(1, ...rows.map((x) => x.h24));
+    $('hitRows').innerHTML = rows.length
+      ? rows.map((x) => `<tr>
+          <td>${esc(x.name)}<div class="dim mono">${esc(x.ruleId)}</div></td>
+          <td><b style="color:${x.h24 > 100 ? 'var(--crit)' : x.h24 > 20 ? 'var(--high)' : 'var(--ok)'}">${fmtN(x.h24)}</b></td>
+          <td class="dim">${fmtN(x.total)}</td>
+          <td style="min-width:120px"><div style="height:6px;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));width:${Math.max(3, Math.round((x.h24 / max) * 100))}%"></div></td>
+          <td><button class="mini" data-hrid="${esc(x.ruleId)}" data-st="disabled">禁用</button></td></tr>`).join('')
+      : '<tr><td colspan="5" class="empty">暂无告警数据</td></tr>';
+    document.querySelectorAll('[data-hrid]').forEach((b) => {
+      b.onclick = async () => {
+        if (!confirm(`禁用 ${b.dataset.hrid}？（高噪声规则建议先调阈值再禁用）`)) return;
+        await jget(`/api/v1/rules/${b.dataset.hrid}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: b.dataset.st }) });
+        toast('已禁用（热生效）'); refreshHitStats(); refreshRules();
+      };
+    });
+  } catch (e) { /* 静默 */ }
 }

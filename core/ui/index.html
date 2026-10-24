@@ -198,6 +198,13 @@
       <!-- 规则库 -->
       <section id="view-rules" class="view">
         <div class="panel">
+          <div class="panel-head"><h2>规则命中排行（Top 20）</h2><span class="note">噪声识别：24h 告警数排序，高噪声规则可就地禁用</span></div>
+          <table>
+            <thead><tr><th>规则</th><th>24h 告警</th><th>累计</th><th>占比</th><th>操作</th></tr></thead>
+            <tbody id="hitRows"><tr><td colspan="5" class="empty">加载中…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel">
           <div class="panel-head">
             <h2>检测规则库 <span id="ruleCount" class="count"></span></h2>
             <button id="ruleNew" class="btn primary" style="margin-left:auto">＋ 新建规则</button>
