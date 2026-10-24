@@ -1,12 +1,19 @@
 # 快速上手
 
+> 生产部署、端口规划、环境变量、升级回滚、备份与故障排查见 **[deployment.md](deployment.md)**。本文只讲最短路径。
+> 跨源检索用 **SIME QL**（`POST /api/v1/query`），语法与字段目录见 **[sime-ql.md](sime-ql.md)**。
+> 原始事件怎么进来、怎么查，见 **[ingest.md](ingest.md)**。
+> 日志保留与数据导出见 **[operations.md](operations.md)**。
+
 ## 方式一：Docker（推荐）
 
 ```bash
 bash deploy/install.sh          # 或 docker compose --profile sim up -d --build
 ```
 
-打开控制台：`http://<主机IP>:3000/ui`（默认 **admin / sime123456**，`SIME_ADMIN_PASSWORD` 可覆盖）。
+打开控制台：`http://<主机IP>:${SIME_HTTP_PORT:-3000}/ui`
+（概览 / 实时告警 / 事件检索 / 安全查询 SIME QL / 设备遥测 / 组态总览 / 规则库 / 适配与物模型 / 处置闭环 / 数据湖 / AI 助手）
+（默认 **admin / sime123456**，生产务必用 `SIME_ADMIN_PASSWORD` 与 `SIME_AUTH_SECRET` 覆盖；若 3000 被占用，在 `.env` 设 `SIME_HTTP_PORT=13000`）。
 
 ## 方式二：本地运行 core（无需 Docker）
 
@@ -68,6 +75,11 @@ cd core && npm run validate      # Schema 全量校验 + 适配器样例回归
 | `GET/POST /api/v1/topology/layout` | 组态布局 |
 | `GET /api/v1/playbooks` `GET /api/v1/responses` | 剧本 / 处置闭环 |
 | `GET /api/v1/lake/status` `POST /api/v1/lake/snapshot` `POST /api/v1/lake/query` | 数据湖 |
+| `POST /api/v1/query/sources` `POST /api/v1/query` `POST /api/v1/query/validate` | **SIME QL** 统一查询（见 [sime-ql.md](sime-ql.md)；控制台「安全查询」视图即此能力的图形面） |
+| `GET /api/v1/retention` `POST /api/v1/retention/run` | 日志保留策略与清理（见 [operations.md](operations.md)） |
+| `GET /api/v1/export` `POST /api/v1/export` `GET /api/v1/export/catalog` | 数据导出 CSV / JSONL（见 [operations.md](operations.md)） |
+| `GET /api/v1/events` `GET /api/v1/events/stats` `GET /api/v1/events/:id` | 事件检索（列表 / 分布 / 详情） |
+| `POST /api/v1/ingest/events` `POST /api/v1/ingest/import` `GET /api/v1/ingest/stats` | 事件摄入：直推 / 流量包导入 / 计数（见 [ingest.md](ingest.md)） |
 | `GET /docs` | Swagger |
 
 除 `/health` 与 `/auth/login` 外均需 `Authorization: Bearer <token>`。

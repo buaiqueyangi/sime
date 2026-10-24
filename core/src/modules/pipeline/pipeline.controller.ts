@@ -1,14 +1,22 @@
-import { HttpCode,Body, Controller, Post } from '@nestjs/common';
+import { HttpCode, Body, Controller, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { RuleEngineService } from '../../rule-engine/rule-engine.service';
 import { attackScenario } from '../../rule-engine/scenario';
+import { IngestService } from '../../ingest/ingest.service';
 
 @ApiTags('pipeline')
 @Controller('pipeline')
 export class PipelineController {
-  constructor(private readonly engine: RuleEngineService) {}
+  constructor(
+    private readonly engine: RuleEngineService,
+    private readonly ingest: IngestService,
+  ) {}
 
-  /** 一键攻击回放：内置确定性场景经规则引擎产出告警（演示/验收用，幂等由冷却保证）。 */
+  /**
+   * 一键攻击回放：内置确定性场景经**统一摄入管道**（events 表 + 规则引擎）回放。
+   * 与文件导入、MQTT 接入走同一条链，因此 UI 的事件列表和 SIME QL 的 events 源
+   * 都能看到这批数据，不再只是内存里的告警。
+   */
   @HttpCode(200)
   @Post('simulate')
   simulate(@Body() body: { reset?: boolean }) {
@@ -16,7 +24,7 @@ export class PipelineController {
     const events = attackScenario();
     let newAlerts = 0;
     for (const { ev, ts } of events) {
-      newAlerts += this.engine.feed(ev, ts).length;
+      newAlerts += this.ingest.ingest(ev, { source: 'replay', fallbackTs: ts }).length;
     }
     return {
       events: events.length,

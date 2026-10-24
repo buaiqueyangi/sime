@@ -2,6 +2,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped # auto-start after host reboot
     environment:
       POSTGRES_USER: sime
       POSTGRES_PASSWORD: ${SIME_PG_PASSWORD:-sime-change-me}
@@ -19,6 +20,7 @@ services:
 
   emqx:
     image: emqx/emqx:5.8
+    restart: unless-stopped
     ports: ["1883:1883", "18083:18083"]
 
   core:
@@ -26,6 +28,7 @@ services:
       context: .
       dockerfile: core/Dockerfile
     init: true # 容器内 PID 1 信号转发，滚动重启零僵尸
+    restart: unless-stopped
     environment:
       SIME_PORT: "3000"
       SIME_ASSET_ROOT: /app/assets
@@ -34,6 +37,9 @@ services:
       SIME_PG_DDL_DIR: /app/assets/storage/pg/init
       SIME_MQTT_URL: mqtt://emqx:1883
       SIME_WORKERS: ${SIME_WORKERS:-1}
+      # 固定会话密钥：不设置则每次重启随机生成，所有已登录会话全部失效（现象：页面"显示不出来"）
+      SIME_AUTH_SECRET: ${SIME_AUTH_SECRET:-}
+      SIME_ADMIN_PASSWORD: ${SIME_ADMIN_PASSWORD:-}
       SIME_LLM_BASEURL: ${SIME_LLM_BASEURL:-}
       SIME_LLM_APIKEY: ${SIME_LLM_APIKEY:-}
       SIME_LLM_MODEL: ${SIME_LLM_MODEL:-qwen2.5:7b}
@@ -62,6 +68,7 @@ services:
       dockerfile: core/Dockerfile
     command: node dist/scripts/device-sim.js --loop
     profiles: ["sim"]
+    restart: unless-stopped
     environment:
       SIME_MQTT_URL: mqtt://emqx:1883
     depends_on:

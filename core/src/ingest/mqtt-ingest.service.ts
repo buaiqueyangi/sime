@@ -1,14 +1,15 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import cluster from 'node:cluster';
+import { hostname } from 'node:os';
 import mqtt, { MqttClient } from 'mqtt';
-import { TelemetryService, TelemetryPoint } from '../telemetry/telemetry.service';
-import { RuleEngineService } from '../rule-engine/rule-engine.service';
+import { TelemetryService } from '../telemetry/telemetry.service';
+import { IngestService } from './ingest.service';
 import { WsService } from '../ws/ws.service';
 
 /**
  * MQTT 设备接入服务（M1/M3）：
  *   sime/v1/{deviceId}/telemetry  payload: {asset_id?, kind?, ts?, points:{...}} 或 {point, value}
- *   sime/v1/{deviceId}/event      payload: ECS 基线事件 → 规则引擎
+ *   sime/v1/{deviceId}/event      payload: ECS 基线事件 → 统一摄入管道（events 表 + 规则引擎）
  * 单进程模式（SIME_WORKERS=1）：本服务内联处理（登记/遥测/规则）。
  * 多分片模式（SIME_WORKERS>1）：主进程只做接收与哈希分发（同设备必落同分片），
  * 计算与持久化在 worker 内自治。
@@ -24,7 +25,7 @@ export class MqttIngestService implements OnModuleInit {
 
   constructor(
     private readonly tel: TelemetryService,
-    private readonly engine: RuleEngineService,
+    private readonly ingest: IngestService,
     private readonly ws: WsService,
   ) {}
 
@@ -34,11 +35,25 @@ export class MqttIngestService implements OnModuleInit {
       this.logger.log(`MQTT 接入关闭（url=${url ?? '未设置'}, ingest=${process.env.SIME_MQTT_INGEST ?? '1'}）`);
       return;
     }
-    this.client = mqtt.connect(url, { clientId: `sime-core-${Date.now() % 100000}`, reconnectPeriod: 3000 });
+    // clientId 必须可预测：随机/带时间戳的 clientId 会让每次重启都留下一个游离会话，
+    // broker 侧看到的"设备"越积越多，排障时根本分不清哪个是活的（现网踩过）。
+    const clientId = process.env.SIME_MQTT_CLIENT_ID ?? `sime-core-${hostname().slice(0, 16)}`;
+    this.client = mqtt.connect(url, { clientId, reconnectPeriod: 3000, clean: true });
     this.client.on('connect', () => {
-      this.logger.log(`mqtt connected: ${url}${this.sharded ? ` (sharded → ${WORKERS()} workers)` : ' (inline)'}`);
-      this.client!.subscribe(['sime/v1/+/telemetry', 'sime/v1/+/event']);
+      this.logger.log(`mqtt connected: ${url} clientId=${clientId}${this.sharded ? ` (sharded → ${WORKERS()} workers)` : ' (inline)'}`);
+      this.client!.subscribe(['sime/v1/+/telemetry', 'sime/v1/+/event'], { qos: 0 }, (err, granted) => {
+        if (err) {
+          this.logger.error(`mqtt subscribe failed: ${err.message}`);
+          return;
+        }
+        // 订阅被 broker 拒绝时 granted.qos = 128，连接看着是好的但一条消息都收不到
+        const denied = (granted ?? []).filter((g) => g.qos === 128).map((g) => g.topic);
+        if (denied.length) this.logger.error(`mqtt subscribe denied: ${denied.join(', ')}（ACL 或 broker 配置问题）`);
+        else this.logger.log(`mqtt subscribed: ${(granted ?? []).map((g) => g.topic).join(', ')}`);
+      });
     });
+    this.client.on('reconnect', () => this.logger.warn('mqtt reconnecting...'));
+    this.client.on('offline', () => this.logger.warn('mqtt offline'));
     this.client.on('message', (topic, payload) => this.onMessage(topic, payload));
     this.client.on('error', (e) => this.logger.warn(`mqtt: ${e.message}`));
   }
@@ -98,7 +113,8 @@ export class MqttIngestService implements OnModuleInit {
       this.tel.ingest(m.deviceId, m.body, m.ts);
     } else {
       const m = msg as { body: Record<string, unknown>; ts: number };
-      if (this.engine.feed(m.body, m.ts).length) this.alerts++;
+      // 事件走统一摄入管道：归一 → events 表 → 规则引擎（与 HTTP 导入同一条链）
+      if (this.ingest.ingest(m.body, { source: 'mqtt', fallbackTs: m.ts }).length) this.alerts++;
     }
   }
 
@@ -110,6 +126,7 @@ export class MqttIngestService implements OnModuleInit {
       dispatched: this.dispatched,
       alertsFromEvents: this.alerts,
       sharded: this.sharded,
+      eventStore: this.ingest.stats().store,
     };
   }
 }

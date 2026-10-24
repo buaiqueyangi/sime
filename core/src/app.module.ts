@@ -25,6 +25,18 @@ import { TopologyService } from './topology/topology.service';
 import { TopologyController } from './topology/topology.controller';
 import { AssistantService } from './assistant/assistant.service';
 import { AssistantController } from './assistant/assistant.controller';
+import { QueryService } from './query/query.service';
+import { QueryController } from './query/query.controller';
+import { RetentionService } from './maintenance/retention.service';
+import { RetentionController } from './maintenance/retention.controller';
+import { ExportService } from './maintenance/export.service';
+import { ExportController } from './maintenance/export.controller';
+import { EventStoreService } from './ingest/event-store.service';
+import { EventsService } from './ingest/events.service';
+import { EventsController } from './ingest/events.controller';
+import { IngestService } from './ingest/ingest.service';
+import { IngestController } from './ingest/ingest.controller';
+import { ImportService } from './ingest/import.service';
 
 @Module({
   controllers: [
@@ -41,6 +53,11 @@ import { AssistantController } from './assistant/assistant.controller';
     LakeController,
     TopologyController,
     AssistantController,
+    QueryController,
+    RetentionController,
+    ExportController,
+    EventsController,
+    IngestController,
   ],
   providers: [
     AssetRegistryService,
@@ -56,6 +73,13 @@ import { AssistantController } from './assistant/assistant.controller';
     LakeService,
     TopologyService,
     AssistantService,
+    QueryService,
+    RetentionService,
+    ExportService,
+    EventStoreService,
+    EventsService,
+    IngestService,
+    ImportService,
   ],
 })
 export class AppModule {}

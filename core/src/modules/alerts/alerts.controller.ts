@@ -1,6 +1,7 @@
-import { HttpCode,Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { HttpCode, Body, Controller, Get, NotFoundException, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { sql } from 'kysely';
+import { AssetRegistryService } from '../../common/asset-registry.service';
 import { PgProfileService } from '../../common/pg-profile.service';
 import { RuleEngineService } from '../../rule-engine/rule-engine.service';
 import { WsService } from '../../ws/ws.service';
@@ -12,6 +13,7 @@ export class AlertsController {
     private readonly engine: RuleEngineService,
     private readonly pg: PgProfileService,
     private readonly ws: WsService,
+    private readonly registry: AssetRegistryService,
   ) {}
 
   /** 告警列表：PG 激活时读持久化历史（含状态，可闭环操作）；否则内存态。 */
@@ -53,6 +55,7 @@ export class AlertsController {
           state: r.state,
           ts: new Date(r.ts).toISOString(),
           groupKey: entity.groupKey ?? '-',
+          hits: Number(entity.hits ?? 0),
           summary: r.summary ?? '',
           actions: [] as string[],
         };
@@ -92,6 +95,116 @@ export class AlertsController {
       hours.push({ ts, count: buckets.get(ts) ?? 0 });
     }
     return { hours, total: hours.reduce((s, x) => s + x.count, 0) };
+  }
+
+  /**
+   * 告警详情：控制台点开一条告警看到的东西。
+   *
+   * 告警行本身只存了 `entity{groupKey,hits}`，看不出"为什么报"。这里把
+   * 规则定义（检测条件/窗口/分组）、处置建议、响应动作、ATT&CK 与关联工单
+   * 一并拼出来 —— 值班人员不点进规则库就该知道下一步做什么。
+   *
+   * id 既接受 `pg-123`（列表返回的形式）也接受裸数字 `123`。
+   */
+  @Get(':id')
+  async detail(@Param('id') id: string) {
+    const pgId = Number(String(id).replace(/^pg-/, ''));
+    const hasPg = Number.isFinite(pgId) && pgId > 0;
+    const db = this.pg.database;
+
+    let base:
+      | {
+          id: string;
+          pgId?: number;
+          ruleId: string;
+          ts: string;
+          severity: string;
+          domain: string;
+          state: string;
+          groupKey: string;
+          hits: number;
+          summary: string;
+          actions: string[];
+        }
+      | null = null;
+
+    if (db && hasPg) {
+      const row = await db.selectFrom('alerts').selectAll().where('id', '=', pgId).executeTakeFirst();
+      if (row) {
+        const entity = (row.entity ?? {}) as { groupKey?: string; hits?: number };
+        base = {
+          id: `pg-${row.id}`,
+          pgId: row.id,
+          ruleId: row.rule_id,
+          ts: new Date(row.ts).toISOString(),
+          severity: row.severity,
+          domain: row.domain,
+          state: row.state,
+          groupKey: entity.groupKey ?? '-',
+          hits: Number(entity.hits ?? 0),
+          summary: row.summary ?? '',
+          actions: [],
+        };
+      }
+    }
+    if (!base) {
+      // 内存态（或 PG 里已过期清理）：回落到引擎内的告警缓存
+      const mem = this.engine.engine.alerts.find((a) => a.id === id || (hasPg && a.pgId === pgId));
+      if (!mem) throw new NotFoundException(`告警不存在：${id}`);
+      base = {
+        id: mem.id,
+        ...(mem.pgId !== undefined ? { pgId: mem.pgId } : {}),
+        ruleId: mem.ruleId,
+        ts: mem.ts,
+        severity: mem.severity,
+        domain: mem.domain,
+        state: mem.state ?? 'open',
+        groupKey: mem.groupKey ?? '-',
+        hits: Number(mem.hits ?? 0),
+        summary: mem.summary ?? '',
+        actions: mem.actions ?? [],
+      };
+    }
+
+    const def = this.registry.get('rules').entries.find(({ data }) => data['id'] === base!.ruleId)?.data;
+    const detection = (def?.['detection'] ?? null) as Record<string, unknown> | null;
+    const response = (def?.['response'] ?? {}) as { default?: string[] };
+
+    const tickets =
+      db && base.pgId
+        ? await db
+            .selectFrom('tickets')
+            .select(['id', 'title', 'state', 'created_at'])
+            .where('alert_id', '=', base.pgId)
+            .orderBy('id', 'desc')
+            .limit(10)
+            .execute()
+        : [];
+
+    return {
+      ...base,
+      rule: def
+        ? {
+            name: String(def['name'] ?? base.ruleId),
+            version: String(def['version'] ?? '-'),
+            category: String(def['category'] ?? '-'),
+            status: String(def['status'] ?? '-'),
+            tactics: (def['tactics'] as string[]) ?? [],
+            techniques: (def['techniques'] as string[]) ?? [],
+            detection,
+            triage: String(def['triage'] ?? ''),
+            response: response.default ?? [],
+            references: (def['references'] as string[]) ?? [],
+            file: this.registry.get('rules').entries.find(({ data }) => data['id'] === base!.ruleId)?.file ?? null,
+          }
+        : null,
+      tickets: tickets.map((t) => ({
+        id: t.id,
+        title: t.title,
+        state: t.state,
+        createdAt: new Date(t.created_at).toISOString(),
+      })),
+    };
   }
 
   /** 告警确认（ack）：值班人员已知晓并开始处理。 */

@@ -19,6 +19,9 @@ export class AdaptersController {
         protocol: data['protocol'],
         threatCount: Object.keys(threatMap).length,
         file,
+        // 解析格式与原始样例：控制台"试一下"、流量包导入的 adapter 模式都要靠它自检
+        format: (data['parse'] as { format?: string } | undefined)?.format,
+        sample: String(data['sample'] ?? ''),
       };
     });
   }

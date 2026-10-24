@@ -11,12 +11,22 @@ const rel = (ts) => {
 };
 const hhmmss = (ts) => new Date(ts).toLocaleTimeString('zh-CN', { hour12: false });
 
+/* 会话失效：清坏 token、回登录页、只提示一次（后台轮询每 2-3 秒触发一次 401，不能连着弹） */
+let authExpired = false;
+function handle401() {
+  showLogin(true);
+  if (!authExpired) {
+    authExpired = true;
+    localStorage.removeItem('sime_token');
+    const err = $('loginErr');
+    if (err) err.textContent = '登录已过期（服务可能重启过），请重新登录';
+  }
+  throw new Error('未登录或会话已过期');
+}
+
 async function jget(url, opts = {}) {
   const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + (localStorage.getItem('sime_token') || '') } });
-  if (r.status === 401) {
-    showLogin(true);
-    throw new Error('未登录或会话已过期');
-  }
+  if (r.status === 401) return handle401();
   if (!r.ok) throw new Error(`${url} → ${r.status}`);
   return r.json();
 }
@@ -36,6 +46,8 @@ $('loginBtn').onclick = async () => {
     if (!r.ok) throw new Error((await r.json()).message || '登录失败');
     const j = await r.json();
     localStorage.setItem('sime_token', j.token);
+    authExpired = false;
+    $('loginErr').textContent = '';
     showLogin(false);
     lastAlertCount = -1;
     toast(`欢迎回来，${j.user}`);
@@ -56,7 +68,7 @@ function toast(msg, isErr = false) {
 }
 
 /* ===== 视图切换 ===== */
-const TITLES = { overview: '概览', alerts: '实时告警', telemetry: '设备遥测', topology: '组态总览', rules: '检测规则库', catalog: '适配与物模型', response: '处置闭环', lake: '数据湖', assistant: 'AI 助手' };
+const TITLES = { overview: '概览', alerts: '实时告警', events: '事件检索', query: '安全查询', telemetry: '设备遥测', topology: '组态总览', rules: '检测规则库', catalog: '适配与物模型', response: '处置闭环', lake: '数据湖', assistant: 'AI 助手' };
 let currentView = 'overview';
 
 function showView(v) {
@@ -65,6 +77,8 @@ function showView(v) {
   document.querySelectorAll('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.view === v));
   $('viewTitle').textContent = TITLES[v] ?? v;
   if (v === 'telemetry') setTimeout(() => { if (chart) chart.resize(); refreshTelemetry(); }, 30);
+  if (v === 'events') { refreshEvents(); refreshEventStats(); }
+  if (v === 'query') initQuery();
   if (v === 'response') refreshResponses();
   if (v === 'lake') refreshLake();
   if (v === 'topology') refreshTopology();
@@ -117,11 +131,14 @@ async function refreshOverviewAlerts() {
   const a = await jget('/api/v1/alerts');
   const rows = (a.items || []).slice(0, 6);
   $('ovAlerts').innerHTML = rows.length
-    ? rows.map((x) => `<tr>
+    ? rows.map((x) => `<tr class="alert-row" data-key="${esc(x.pgId ?? x.id)}" title="点击查看详情">
         <td><span class="tag ${esc(x.severity)}">${esc(x.severity)}</span></td>
         <td>${esc(x.ruleName)}<div class="dim mono">${esc(x.ruleId)}</div></td>
         <td class="dim">${rel(Date.parse(x.ts))}</td></tr>`).join('')
     : '<tr><td class="empty">暂无告警</td></tr>';
+  document.querySelectorAll('#ovAlerts tr.alert-row').forEach((tr) => {
+    tr.onclick = () => openAlertDetail(tr.dataset.key);
+  });
   $('ovComponents').innerHTML = [
     ['MQTT 接入', health ? (health.pgProfile ? 'EMQX · sime/v1/#' : '未启用') : '-'],
     ['规则引擎', `v2 增量聚合 · ${health ? health.ruleEngine.compiled : '-'} 条已编译`],
@@ -142,18 +159,24 @@ async function refreshAlerts() {
     const filtered = sevFilter === 'all' ? items : items.filter((x) => x.severity === sevFilter);
     $('alertNote').textContent = `累计 ${fmtN(a.stats.alerts)} · 当前显示 ${filtered.length}${a.pgActive ? ' · PG 持久化（可闭环操作）' : ' · 内存态'}`;
     $('alerts').innerHTML = filtered.length
-      ? filtered.map((x) => `<tr>
+      ? filtered.map((x) => `<tr class="alert-row" data-key="${esc(x.pgId ?? x.id)}" title="点击查看详情：规则逻辑 / 处置建议 / 关联工单">
           <td class="mono" title="${esc(x.ts)}">${hhmmss(Date.parse(x.ts))}</td>
           <td><span class="tag ${esc(x.severity)}">${esc(x.severity)}</span></td>
           <td><span class="tag ${esc(x.domain)}">${esc(x.domain)}</span></td>
           <td>${esc(x.ruleName)}<div class="dim mono">${esc(x.ruleId)}</div></td>
-          <td class="mono">${esc(x.groupKey)}</td>
+          <td class="mono">${esc(x.groupKey)}${x.hits ? `<div class="dim">${fmtN(x.hits)} 次</div>` : ''}</td>
           <td><span class="tag ${x.state === 'resolved' ? 'low' : x.state === 'ack' ? 'info' : 'high'}">${esc(x.state || 'open')}</span></td>
           <td>${x.pgId ? `<button class="mini" data-act="ack" data-id="${x.pgId}">确认</button><button class="mini resolve" data-act="resolve" data-id="${x.pgId}">解决</button>` : '<span class="dim">-</span>'}</td>
           <td>${esc(x.summary)}</td></tr>`).join('')
       : '<tr><td colspan="8" class="empty">该级别暂无告警</td></tr>';
     document.querySelectorAll('#alerts [data-act]').forEach((b) => {
-      b.onclick = () => alertAction(b.dataset.act, b.dataset.id);
+      b.onclick = (e) => {
+        e.stopPropagation();
+        alertAction(b.dataset.act, b.dataset.id);
+      };
+    });
+    document.querySelectorAll('#alerts tr.alert-row').forEach((tr) => {
+      tr.onclick = () => openAlertDetail(tr.dataset.key);
     });
     if (items.length !== lastAlertCount) {
       lastAlertCount = items.length;
@@ -168,10 +191,126 @@ async function alertAction(act, pgId) {
     await jget(`/api/v1/alerts/${pgId}/${act}`, { method: 'POST' });
     toast(`告警 #${pgId} 已${act === 'ack' ? '确认' : '解决'}`);
     refreshAlerts();
+    if (modalAlert && String(modalAlert.key) === String(pgId)) openAlertDetail(pgId);
   } catch (e) {
     toast('操作失败: ' + e.message, true);
   }
 }
+
+/* ===== 告警详情（点开一条告警：为什么报、该怎么办、关联了什么） ===== */
+let modalAlert = null;
+
+function closeAlertModal() {
+  $('alertModal').classList.add('hidden');
+  modalAlert = null;
+}
+
+async function openAlertDetail(key) {
+  modalAlert = { key };
+  const modal = $('alertModal');
+  modal.classList.remove('hidden');
+  $('alertModalTitle').textContent = '告警详情';
+  $('alertModalTags').innerHTML = '';
+  $('alertModalBody').innerHTML = '<p class="dim">加载中…</p>';
+  $('alertAck').classList.add('hidden');
+  $('alertResolve').classList.add('hidden');
+  try {
+    const d = await jget('/api/v1/alerts/' + encodeURIComponent(key));
+    modalAlert = { key, data: d };
+    $('alertModalTitle').textContent = d.rule?.name || d.ruleId;
+    $('alertModalTags').innerHTML = [
+      `<span class="tag ${esc(d.severity)}">${esc(d.severity)}</span>`,
+      `<span class="tag ${esc(d.domain)}">${esc(d.domain)}</span>`,
+      `<span class="tag ${d.state === 'resolved' ? 'low' : d.state === 'ack' ? 'info' : 'high'}">${esc(d.state)}</span>`,
+      `<span class="note mono">${esc(d.ruleId)}</span>`,
+    ].join('');
+    if (d.pgId) {
+      $('alertAck').classList.remove('hidden');
+      $('alertResolve').classList.remove('hidden');
+      $('alertAck').onclick = () => alertAction('ack', d.pgId);
+      $('alertResolve').onclick = () => alertAction('resolve', d.pgId);
+    }
+    $('alertModalBody').innerHTML = renderAlertDetail(d);
+    const go = $('alertGoEvents');
+    go.onclick = () => {
+      closeAlertModal();
+      showView('events');
+      $('evtQ').value = d.groupKey && d.groupKey !== '-' ? d.groupKey : '';
+      evtState.q = $('evtQ').value;
+      refreshEvents();
+      refreshEventStats();
+    };
+  } catch (e) {
+    $('alertModalBody').innerHTML = `<p class="note" style="color:var(--crit)">${esc(e.message)}</p>`;
+  }
+}
+
+function renderAlertDetail(d) {
+  const det = d.rule && d.rule.detection ? d.rule.detection : null;
+  const kv = `<dl class="kv">
+      <dt>时间</dt><dd class="mono">${esc(d.ts)} <span class="dim">(${rel(Date.parse(d.ts))})</span></dd>
+      <dt>命中主体</dt><dd class="mono">${esc(d.groupKey)}</dd>
+      <dt>命中次数</dt><dd>${fmtN(d.hits)}</dd>
+      <dt>规则</dt><dd>${esc(d.rule?.name || d.ruleId)} <span class="dim mono">${esc(d.ruleId)}${d.rule ? ' · v' + esc(d.rule.version) : ''}</span></dd>
+      <dt>摘要</dt><dd>${esc(d.summary || '—')}</dd>
+    </dl>`;
+
+  const cond = det
+    ? `<div class="jsonbox">${esc(
+        [
+          det['source'] ? `source:     ${det['source']}` : '',
+          det['window'] ? `window:     ${det['window']}` : '',
+          Array.isArray(det['group_by']) && det['group_by'].length ? `group_by:   ${det['group_by'].join(', ')}` : '',
+          det['condition'] ? `condition:  ${det['condition']}` : '',
+          det['threshold'] ? `threshold:  ${JSON.stringify(det['threshold'])}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      )}</div>`
+    : '<p class="dim">规则定义不可用（规则文件可能已下线）</p>';
+
+  const atk = d.rule
+    ? [...(d.rule.tactics || []), ...(d.rule.techniques || [])]
+    : [];
+
+  const tickets = (d.tickets || []).length
+    ? `<table><thead><tr><th>#</th><th>标题</th><th>状态</th><th>创建</th></tr></thead><tbody>${d.tickets
+        .map(
+          (t) =>
+            `<tr><td class="mono">${esc(t.id)}</td><td>${esc(t.title)}</td>
+             <td><span class="tag ${t.state === 'closed' ? 'low' : 'medium'}">${esc(t.state)}</span></td>
+             <td class="dim mono">${hhmmss(Date.parse(t.createdAt))}</td></tr>`,
+        )
+        .join('')}</tbody></table>`
+    : '<p class="dim">无关联工单（该规则未配置 ticket.create，或工单已归档）</p>';
+
+  const refs = (d.rule?.references || [])
+    .map((r) => {
+      const s = String(r);
+      const url = /^https?:\/\//.test(s) ? s : '';
+      return `<li>${url ? `<a href="${esc(url)}" target="_blank" rel="noreferrer">${esc(s)}</a>` : esc(s)}</li>`;
+    })
+    .join('');
+
+  return `
+    ${kv}
+    <div class="sec"><h3 class="sec-title">检测逻辑</h3>${cond}</div>
+    ${d.rule?.triage ? `<div class="sec"><h3 class="sec-title">处置建议</h3><p>${esc(d.rule.triage)}</p></div>` : ''}
+    ${
+      (d.rule?.response || []).length
+        ? `<div class="sec"><h3 class="sec-title">触发动作</h3><div class="taglist">${d.rule.response
+            .map((r) => `<span class="tag info mono">${esc(r)}</span>`)
+            .join('')}</div></div>`
+        : ''
+    }
+    ${atk.length ? `<div class="sec"><h3 class="sec-title">ATT&amp;CK</h3><div class="taglist">${atk.map((t) => `<span class="tag medium">${esc(t)}</span>`).join('')}</div></div>` : ''}
+    <div class="sec"><h3 class="sec-title">关联工单</h3>${tickets}</div>
+    ${refs ? `<div class="sec"><h3 class="sec-title">参考</h3><ul class="reflist">${refs}</ul></div>` : ''}
+    ${d.rule?.file ? `<p class="note mono">规则文件：${esc(d.rule.file)}</p>` : ''}`;
+}
+
+$('alertModalClose').onclick = closeAlertModal;
+$('alertModal').onclick = (e) => { if (e.target === $('alertModal')) closeAlertModal(); };
 
 document.querySelectorAll('#sevChips .chip').forEach((c) => {
   c.onclick = () => {
@@ -604,6 +743,539 @@ $('lakeRun').onclick = async () => {
   }
 };
 
+/* ===== 事件检索（events 表：检索 / 聚合 / 流量包导入） =====
+   后端三条端点：GET /events（列表+计数）、GET /events/stats（分布+时间桶）、
+   POST /ingest/import（multipart 流量包）。三者的时间窗口必须一致，
+   否则"总数 500 条但趋势图只有 3 根柱"这类不一致会把人带偏，故统一走 evtQs()。 */
+const evtState = { hours: 24, domain: 'all', category: '', source: '', q: '', limit: 200, total: null };
+const evtSources = new Set();
+const evtNotes = { list: '', stats: '' };
+let evtChart = null;
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+/** 事件时间展示：7 天窗口下只显示时分秒会丢掉日期，一律带 MM-DD */
+function evtTime(v) {
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v ?? '');
+  return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+
+/** 端点展示：ip:port 优先，退到 asset_id / asset.id / host（不同适配器填的字段不一样） */
+function evtEnd(o) {
+  if (!o || typeof o !== 'object') return '';
+  const ip = o.ip ?? o.asset_id ?? o['asset']?.id ?? o.host ?? '';
+  const port = o.port ? `:${o.port}` : '';
+  return ip ? `${ip}${port}` : '';
+}
+
+function evtQs(extra) {
+  const p = new URLSearchParams();
+  p.set('from', new Date(Date.now() - evtState.hours * 3600_000).toISOString());
+  p.set('limit', String(evtState.limit));
+  if (evtState.domain !== 'all') p.set('domain', evtState.domain);
+  if (evtState.category) p.set('category', evtState.category);
+  if (evtState.source) p.set('source', evtState.source);
+  if (evtState.q) p.set('q', evtState.q);
+  for (const [k, v] of Object.entries(extra ?? {})) p.set(k, String(v));
+  return p.toString();
+}
+
+function paintEvtNote() {
+  $('evtNote').textContent = [evtNotes.list, evtNotes.stats].filter(Boolean).join(' · ');
+}
+
+async function refreshEvents() {
+  if (currentView !== 'events') return;
+  try {
+    const r = await jget('/api/v1/events?' + evtQs({ count: 1 }));
+    const rows = r.rows || [];
+    evtState.total = typeof r.total === 'number' ? r.total : rows.length;
+    const more = evtState.total > rows.length;
+    $('evtCount').textContent = `共 ${fmtN(evtState.total)} 条${more ? ` · 显示前 ${rows.length} 条` : ''}`;
+    for (const x of rows) if (x.source) evtSources.add(x.source);
+    fillEvtSources();
+    $('evtRows').innerHTML = rows.length
+      ? rows.map(evtRowHtml).join('')
+      : '<tr><td colspan="9" class="empty">该条件下没有事件 —— 换个时间范围，或先用「导入流量包」灌一批数据</td></tr>';
+    document.querySelectorAll('#evtRows tr.evt-row').forEach((tr) => {
+      tr.onclick = () => openEventDetail(tr.dataset.id);
+    });
+    evtNotes.list = `窗口 ${evtTime(r.window.from)} ~ ${evtTime(r.window.to)} · 查询 ${r.ms}ms${more ? ' · 缩小范围或加关键词看全部' : ''}`;
+    paintEvtNote();
+  } catch (e) {
+    $('evtRows').innerHTML = `<tr><td colspan="9" class="empty">${esc(e.message)}</td></tr>`;
+    evtNotes.list = '';
+    paintEvtNote();
+  }
+}
+
+function evtRowHtml(x) {
+  const asset = x.src?.asset_id ?? x.src?.['asset']?.id ?? x.dst?.asset_id ?? x.dst?.['asset']?.id ?? '';
+  return `<tr class="evt-row" data-id="${esc(x.id)}" title="点击查看完整 payload">
+    <td class="mono">${esc(evtTime(x.ts))}</td>
+    <td><span class="tag ${esc(x.domain)}">${esc(x.domain)}</span></td>
+    <td class="dim">${esc(x.category)}</td>
+    <td>${esc(x.name || '—')}${x.threat_id ? `<div class="dim mono">${esc(x.threat_id)}</div>` : ''}</td>
+    <td class="mono">${esc(x.source || '—')}</td>
+    <td class="evt-io">${esc(evtEnd(x.src) || '—')}</td>
+    <td class="evt-io">${esc(evtEnd(x.dst) || '—')}</td>
+    <td class="mono">${esc(asset || '—')}</td>
+    <td><button class="mini" data-detail="${esc(x.id)}">详情</button></td>
+  </tr>`;
+}
+
+function fillEvtSources() {
+  const list = [...evtSources].sort();
+  const cur = evtState.source;
+  $('evtSource').innerHTML =
+    '<option value="">全部来源</option>' +
+    list.map((s) => `<option value="${esc(s)}" ${s === cur ? 'selected' : ''}>${esc(s)}</option>`).join('');
+}
+
+function fillEvtCategories(s) {
+  const cur = evtState.category;
+  const cats = [...new Set((s.byCategory || []).map((x) => x.category))].sort();
+  $('evtCategory').innerHTML =
+    '<option value="">全部类别</option>' +
+    cats.map((c) => `<option value="${esc(c)}" ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join('');
+}
+
+async function refreshEventStats() {
+  if (currentView !== 'events') return;
+  try {
+    // 桶宽跟着窗口走：1h/24h 用 1 小时桶，7d 用 6 小时桶，30d 用 1 天桶，否则柱子全挤成一坨
+    const interval = evtState.hours <= 24 ? '1 hour' : evtState.hours <= 168 ? '6 hour' : '1 day';
+    const s = await jget('/api/v1/events/stats?' + evtQs({ interval }));
+    fillEvtCategories(s);
+    drawEventChart(s);
+    const byDom = (s.byDomain || []).map((d) => `${d.domain} ${fmtN(d.n)}`).join(' / ');
+    evtNotes.stats = `全窗口 ${fmtN(s.total)} 条${byDom ? ` · ${byDom}` : ''} · 桶宽 ${esc(s.interval)}`;
+    paintEvtNote();
+  } catch (e) {
+    evtNotes.stats = `聚合失败：${e.message}`;
+    paintEvtNote();
+  }
+}
+
+function drawEventChart(s) {
+  if (!window.echarts) return;
+  const el = $('evtChart');
+  // 视图隐藏时宽度为 0，此时 init 会得到一张 0px 的画布且不再自适应
+  if (!el.clientWidth) return;
+  if (!evtChart) evtChart = window.echarts.init(el);
+  else evtChart.resize();
+  const buckets = s.byBucket || [];
+  evtChart.setOption(
+    {
+      grid: { left: 44, right: 16, top: 14, bottom: 30 },
+      tooltip: { trigger: 'axis', backgroundColor: '#101c33', borderColor: 'rgba(122,150,205,.3)', textStyle: { color: '#dce5f7' } },
+      xAxis: {
+        type: 'category',
+        data: buckets.map((b) => evtTime(b.bucket).slice(6)),
+        axisLabel: { color: '#7e8fb3', fontSize: 10, interval: Math.max(Math.ceil(buckets.length / 12) - 1, 0) },
+        axisLine: { lineStyle: { color: '#1e2a44' } },
+      },
+      yAxis: { type: 'value', minInterval: 1, axisLabel: { color: '#7e8fb3' }, splitLine: { lineStyle: { color: 'rgba(122,150,205,.12)' } } },
+      series: [
+        {
+          type: 'bar',
+          barWidth: buckets.length > 40 ? '70%' : '52%',
+          itemStyle: { borderRadius: [3, 3, 0, 0], color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: '#4f8cff' }, { offset: 1, color: 'rgba(124,92,255,.35)' }] } },
+          data: buckets.map((b) => b.n),
+        },
+      ],
+    },
+    true,
+  );
+}
+
+async function openEventDetail(id) {
+  $('evtModal').classList.remove('hidden');
+  $('evtModalId').textContent = '#' + id;
+  $('evtModalMeta').textContent = '加载中…';
+  $('evtModalBody').innerHTML = '';
+  try {
+    const e = await jget('/api/v1/events/' + encodeURIComponent(id));
+    $('evtModalMeta').textContent = `${evtTime(e.ts)} · ${e.domain} · ${e.category}`;
+    $('evtModalBody').innerHTML = `
+      <dl class="kv">
+        <dt>时间（UTC）</dt><dd class="mono">${esc(e.ts)}</dd>
+        <dt>域 / 类别</dt><dd><span class="tag ${esc(e.domain)}">${esc(e.domain)}</span> ${esc(e.category)}</dd>
+        <dt>名称</dt><dd>${esc(e.name || '—')}</dd>
+        <dt>来源通道</dt><dd class="mono">${esc(e.source || '—')}</dd>
+        <dt>源</dt><dd class="mono">${esc(evtEnd(e.src) || '—')}</dd>
+        <dt>目的</dt><dd class="mono">${esc(evtEnd(e.dst) || '—')}</dd>
+        <dt>威胁标识</dt><dd class="mono">${esc(e.threat_id || '—')}</dd>
+      </dl>
+      <div class="note" style="margin-bottom:6px">完整 payload（归一化前原文；SIME QL 里可写 payload-&gt;'event'-&gt;&gt;'action' 检索）</div>
+      <div class="jsonbox">${esc(JSON.stringify(e.payload ?? {}, null, 2))}</div>`;
+  } catch (err) {
+    $('evtModalMeta').textContent = '';
+    $('evtModalBody').innerHTML = `<p class="note" style="color:var(--crit)">${esc(err.message)}</p>`;
+  }
+}
+
+function closeEvtModal() {
+  $('evtModal').classList.add('hidden');
+}
+
+async function runImport(file) {
+  const box = $('evtImportOut');
+  box.classList.remove('hidden');
+  if (!file.size) {
+    box.innerHTML = `<div class="import-box err"><div class="hd"><b>${esc(file.name)}</b> <span style="color:var(--crit)">文件为空</span></div></div>`;
+    return;
+  }
+  const feed = $('evtFeed').checked;
+  const mode = ($('evtMode') && $('evtMode').value) || 'flow';
+  const isPcap = /\.(pcap|pcapng|cap)$/i.test(file.name);
+  box.innerHTML = `<div class="import-box"><div class="hd"><b>${esc(file.name)}</b>
+    <span class="note">${(file.size / 1024 / 1024).toFixed(file.size > 1048576 ? 1 : 2)} MB</span>
+    <span class="note">${isPcap ? `抓包解析中（${mode === 'packet' ? '逐包' : '按流聚合'}）…` : '上传解析中…'}</span></div></div>`;
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('source', isPcap ? 'pcap' : 'ui-import');
+  fd.append('feed', feed ? 'true' : 'false');
+  const t0 = Date.now();
+  try {
+    const r = await fetch('/api/v1/ingest/import?mode=' + encodeURIComponent(mode), {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + (localStorage.getItem('sime_token') || '') },
+      body: fd,
+    });
+    if (r.status === 401) return handle401();
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = Array.isArray(j.message) ? j.message.join('；') : j.message;
+      throw new Error(msg || `导入失败（HTTP ${r.status}）`);
+    }
+    renderImportReport(j, file, Date.now() - t0);
+    toast(`导入 ${j.file}：接收 ${j.accepted} / 拒绝 ${j.rejected} / 新增告警 ${j.alerts}`);
+    // 历史抓包/补录常落在当前时间窗之外：导完"看不到"最容易被误判成导入失败
+    const newest = j.pcap && j.pcap.lastMs ? j.pcap.lastMs : null;
+    if (newest) {
+      const ageDays = (Date.now() - newest) / 86400_000;
+      if (newest < Date.now() - evtState.hours * 3600_000) {
+        if (ageDays <= 30) {
+          setEvtRange(720);
+          toast(`数据最新一条在 ${Math.max(1, Math.round(ageDays))} 天前，已自动切到 30 天窗口`);
+        } else {
+          toast(`数据在 ${Math.round(ageDays)} 天前，超出控制台 30 天窗口；请用「安全查询」按 source 检索`, true);
+        }
+      }
+    }
+    await refreshEvents();
+    await refreshEventStats();
+  } catch (e) {
+    box.innerHTML = `<div class="import-box err"><div class="hd"><b>${esc(file.name)}</b>
+      <span style="color:var(--crit)">${esc(e.message)}</span></div></div>`;
+    toast('导入失败: ' + e.message, true);
+  }
+}
+
+function renderImportReport(j, file, wallMs) {
+  const bad = (j.rejected || 0) > 0;
+  const warn = j.warning ? `<div class="note" style="color:var(--high); margin-top:6px">⚠ ${esc(j.warning)}</div>` : '';
+  const span = j.pcap.firstMs ? `${evtTime(j.pcap.firstMs)} ~ ${evtTime(j.pcap.lastMs)}` : '时间未知';
+  const pcap = j.pcap
+    ? `<div class="note" style="margin-top:6px">抓包：${fmtN(j.pcap.packets)} 包 → ${fmtN(j.pcap.flows)} 条 flow
+        · 截断 ${fmtN(j.pcap.truncated)} / 分片 ${fmtN(j.pcap.fragments)} / 不支持链路 ${fmtN(j.pcap.unsupportedLink)}
+        · ${esc(span)}
+        ${j.pcap.overflowFlows ? ` · 流表溢出丢弃 ${fmtN(j.pcap.overflowFlows)}` : ''}</div>`
+    : '';
+  const errs = (j.errors || []).length
+    ? `<ul class="errs">${j.errors.map((e) => `<li>第 <code>${esc(e.line)}</code> 行：${esc(e.reason)}</li>`).join('')}</ul>`
+    : '';
+  $('evtImportOut').innerHTML = `<div class="import-box${bad ? ' err' : ''}">
+    <div class="hd">
+      <b>${esc(j.file || file.name)}</b>
+      <span class="tag low">接收 ${fmtN(j.accepted)}</span>
+      <span class="tag ${bad ? 'high' : 'low'}">拒绝 ${fmtN(j.rejected)}</span>
+      <span class="tag ${j.alerts ? 'medium' : 'low'}">告警 ${fmtN(j.alerts)}</span>
+      <span class="note">格式 ${esc(j.format)}${j.adapter ? ' · 适配器 ' + esc(j.adapter) : ''} · 来源 ${esc(j.source)}</span>
+      <span class="note">${j.stored ? '已落库' : '仅研判'} / ${j.fed ? '已研判' : '不研判'} · ${fmtN(j.ms ?? wallMs)}ms</span>
+    </div>${pcap}${warn}${errs}</div>`;
+}
+
+$('evtQuery').onclick = () => {
+  evtState.q = $('evtQ').value.trim();
+  refreshEvents();
+  refreshEventStats();
+};
+$('evtQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('evtQuery').click(); });
+
+document.querySelectorAll('#evtRange .chip').forEach((c) => {
+  c.onclick = () => setEvtRange(Number(c.dataset.range) || 24);
+});
+
+function setEvtRange(hours) {
+  evtState.hours = hours;
+  document.querySelectorAll('#evtRange .chip').forEach((x) => {
+    x.classList.toggle('active', Number(x.dataset.range) === hours);
+  });
+  refreshEvents();
+  refreshEventStats();
+}
+document.querySelectorAll('#evtDomain .chip').forEach((c) => {
+  c.onclick = () => {
+    document.querySelectorAll('#evtDomain .chip').forEach((x) => x.classList.remove('active'));
+    c.classList.add('active');
+    evtState.domain = c.dataset.domain;
+    refreshEvents();
+    refreshEventStats();
+  };
+});
+
+$('evtCategory').onchange = (e) => { evtState.category = e.target.value; refreshEvents(); refreshEventStats(); };
+$('evtSource').onchange = (e) => { evtState.source = e.target.value; refreshEvents(); };
+$('evtImport').onclick = () => $('evtFile').click();
+$('evtFile').onchange = (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (f) runImport(f);
+};
+$('evtModalClose').onclick = closeEvtModal;
+$('evtModal').onclick = (e) => { if (e.target === $('evtModal')) closeEvtModal(); };
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  closeEvtModal();
+  closeAlertModal();
+});
+
+/* ===== 安全查询（SIME QL） =====
+   POST /query 是平台唯一查询面；控制台只做三件事：给数据源与字段（catalog）、
+   把编译结果摊开（sql/params/notes 可排错）、把错误原样显示（kind + pos）。
+   不要在 UI 里重写一遍语法校验——两份实现迟早漂移。 */
+let qlCatalog = null;
+let qlLastQuery = '';
+
+/** 带业务错误的 POST：把 Nest 返回的 {message, kind, pos} 原样抬成 Error 字段 */
+async function jcall(url, body, method = 'POST') {
+  const r = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('sime_token') || '') },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (r.status === 401) return handle401();
+  let j = null;
+  try { j = await r.json(); } catch { /* 非 JSON 响应 */ }
+  if (!r.ok) {
+    const raw = j && j.message ? j.message : `HTTP ${r.status}`;
+    const err = new Error(Array.isArray(raw) ? raw.join('；') : String(raw));
+    err.kind = j && j.kind;
+    err.pos = j && j.pos;
+    err.status = r.status;
+    throw err;
+  }
+  return j;
+}
+
+function qlMsg(type, tag, text) {
+  const box = $('qlMsg');
+  box.classList.remove('hidden');
+  box.className = 'ql-msg ' + (type === 'ok' ? 'ql-ok' : 'ql-err');
+  box.innerHTML = `<span class="kind">${esc(tag)}</span>${esc(text)}`;
+}
+
+function qlClearMsg() {
+  $('qlMsg').classList.add('hidden');
+  $('qlMsg').innerHTML = '';
+}
+
+async function initQuery() {
+  if (!qlCatalog) {
+    try {
+      qlCatalog = await jget('/api/v1/query/sources');
+    } catch (e) {
+      qlMsg('err', 'catalog', '数据源目录获取失败：' + e.message);
+      return;
+    }
+    renderQlCatalog();
+  }
+  if (!$('qlText').value.trim()) {
+    $('qlText').value = (qlCatalog.examples && qlCatalog.examples[0]) || '';
+    qlSyncSourceSelect();
+  }
+  renderQlFields();
+  $('qlText').focus();
+}
+
+function renderQlCatalog() {
+  const sources = qlCatalog.sources || [];
+  const lim = qlCatalog.limits || {};
+  $('qlNote').textContent = `${qlCatalog.language} ${qlCatalog.version} · ${sources.length} 个数据源`;
+  $('qlHint').textContent = `默认 limit ${lim.defaultLimit ?? '-'} · 上限 ${lim.maxLimit ?? '-'} · 超时 ${Math.round((lim.timeoutMs ?? 0) / 1000)}s`;
+  $('qlSource').innerHTML =
+    '<option value="">数据源…</option>' +
+    sources.map((s) => `<option value="${esc(s.name)}">${esc(s.name)}${s.large ? '（大表）' : ''}</option>`).join('');
+  $('qlExamples').innerHTML = (qlCatalog.examples || [])
+    .map((ex, i) => `<button class="chip" data-example="${i}" title="${esc(ex)}">${esc(ex.length > 74 ? ex.slice(0, 74) + '…' : ex)}</button>`)
+    .join('');
+  document.querySelectorAll('#qlExamples [data-example]').forEach((b) => {
+    b.onclick = () => {
+      $('qlText').value = qlCatalog.examples[Number(b.dataset.example)] || '';
+      qlSyncSourceSelect();
+      renderQlFields();
+      $('qlText').focus();
+    };
+  });
+}
+
+/** 文本首 token 与某个数据源同名 → 同步下拉，让字段提示跟着走 */
+function qlSyncSourceSelect() {
+  const m = /^\s*([a-z_][a-z0-9_]*)/i.exec($('qlText').value || '');
+  const name = m ? m[1].toLowerCase() : '';
+  const hit = (qlCatalog?.sources || []).find((s) => s.name === name || (s.aliases || []).includes(name));
+  $('qlSource').value = hit ? hit.name : '';
+}
+
+function renderQlFields() {
+  const name = $('qlSource').value;
+  const src = (qlCatalog?.sources || []).find((s) => s.name === name);
+  if (!src) { $('qlFields').innerHTML = ''; return; }
+  const fields = src.fields || [];
+  $('qlFields').innerHTML =
+    `<span class="note" style="margin-right:4px">${esc(src.label || src.name)}${src.note ? ' · ' + esc(src.note) : ''}</span>` +
+    fields.map((f) => `<span class="fld" data-field="${esc(f)}">${esc(f)}</span>`).join('');
+  document.querySelectorAll('#qlFields [data-field]').forEach((el) => {
+    el.onclick = () => insertAtCursor($('qlText'), el.dataset.field);
+  });
+}
+
+function insertAtCursor(el, text) {
+  const s = el.selectionStart ?? el.value.length;
+  const e = el.selectionEnd ?? s;
+  el.value = el.value.slice(0, s) + text + el.value.slice(e);
+  el.selectionStart = el.selectionEnd = s + text.length;
+  el.focus();
+}
+
+async function runQuery() {
+  const q = $('qlText').value.trim();
+  if (!q) { qlMsg('err', 'empty', '先写一条查询语句（可点下方示例）'); return; }
+  qlClearMsg();
+  $('qlRun').disabled = true;
+  $('qlNote').textContent = '查询中…';
+  const t0 = Date.now();
+  try {
+    const r = await jcall('/api/v1/query', { q });
+    qlLastQuery = q;
+    renderQlResult(r, Date.now() - t0);
+    $('qlNote').textContent = `${qlCatalog?.language || 'SIME QL'} · 上次 ${r.rowCount} 行 / ${r.totalMs}ms`;
+  } catch (e) {
+    $('qlNote').textContent = '查询失败';
+    const pos = e.pos !== undefined && e.pos !== null ? `（位置 ${e.pos}）` : '';
+    qlMsg('err', e.kind || `HTTP ${e.status || '?'}`, e.message + pos);
+    $('qlOut').innerHTML = '';
+  }
+  $('qlRun').disabled = false;
+}
+
+function renderQlResult(r, wallMs) {
+  const cols = r.columns || [];
+  const all = r.rows || [];
+  const cap = 500;
+  const rows = all.slice(0, cap);
+  const cell = (v) => {
+    if (v === null || v === undefined) return '<span class="dim">—</span>';
+    if (typeof v === 'object') {
+      const s = JSON.stringify(v);
+      return `<span title="${esc(s)}">${esc(s.length > 120 ? s.slice(0, 120) + '…' : s)}</span>`;
+    }
+    return esc(v);
+  };
+  const meta = `<div class="ql-meta">
+      <span>数据源 <b>${esc(r.source)}</b></span>
+      <span>返回 <b>${fmtN(r.rowCount)}</b> 行${all.length > cap ? `（仅渲染前 ${cap} 行，导出拿全量）` : ''}</span>
+      <span>limit ${fmtN(r.limit)}</span>
+      <span>DB ${fmtN(r.dbMs)}ms · 端到端 ${fmtN(wallMs)}ms</span>
+    </div>`;
+  const notes = (r.notes || []).length ? `<div class="note" style="margin-bottom:10px">${r.notes.map((n) => esc(n)).join('；')}</div>` : '';
+  const table = cols.length
+    ? `<div class="ql-table-wrap"><table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+        <tbody>${rows.length
+          ? rows.map((row) => `<tr>${cols.map((c) => `<td class="mono">${cell(row[c])}</td>`).join('')}</tr>`).join('')
+          : `<tr><td colspan="${cols.length}" class="empty">0 行 —— 条件可能太严，或该时间窗内确实没有数据</td></tr>`}</tbody></table></div>`
+    : '<p class="dim">查询没有输出列</p>';
+  const details = `<details class="ql-details"><summary>编译产物（参数化 SQL，可复制到 psql 复现）</summary>
+      <pre>${esc(r.sql)}</pre>
+      <pre>params = ${esc(JSON.stringify(r.params ?? []))}</pre></details>`;
+  $('qlOut').innerHTML = meta + notes + table + details;
+}
+
+async function qlValidate() {
+  const q = $('qlText').value.trim();
+  if (!q) { qlMsg('err', 'empty', '先写一条查询语句'); return; }
+  try {
+    const r = await jcall('/api/v1/query/validate', { q });
+    const cols = (r.columns || []).join(', ') || '—';
+    qlMsg('ok', 'validate', `语法通过 · 输出列：${cols}${(r.notes || []).length ? ' · ' + r.notes.join('；') : ''}`);
+    $('qlOut').innerHTML = `<details class="ql-details" open><summary>编译产物（未执行）</summary>
+        <pre>${esc(r.sql)}</pre><pre>params = ${esc(JSON.stringify(r.params ?? []))}</pre></details>`;
+    $('qlNote').textContent = '校验通过（未执行）';
+  } catch (e) {
+    const pos = e.pos !== undefined && e.pos !== null ? `（位置 ${e.pos}）` : '';
+    qlMsg('err', e.kind || 'syntax', e.message + pos);
+    $('qlNote').textContent = '校验失败';
+  }
+}
+
+/** 导出走 /export（流式，不经过前端内存）；未写 limit 时按服务端 maxRows 上限导 */
+async function qlExport(fmt) {
+  const q = $('qlText').value.trim();
+  if (!q) { qlMsg('err', 'empty', '先写一条查询语句'); return; }
+  const btn = fmt === 'csv' ? $('qlExportCsv') : $('qlExportJsonl');
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/api/v1/export?q=${encodeURIComponent(q)}&format=${fmt}`, {
+      headers: { Authorization: 'Bearer ' + (localStorage.getItem('sime_token') || '') },
+    });
+    if (r.status === 401) return handle401();
+    if (!r.ok) {
+      const j = await r.json().catch(() => null);
+      throw new Error((j && (Array.isArray(j.message) ? j.message.join('；') : j.message)) || `HTTP ${r.status}`);
+    }
+    const blob = await r.blob();
+    const cd = r.headers.get('content-disposition') || '';
+    const hit = /filename="([^"]+)"/.exec(cd);
+    const name = hit ? hit[1] : `sime-export.${fmt}`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+    toast(`已导出 ${name}（${(blob.size / 1024).toFixed(1)} KB）`);
+    qlMsg('ok', 'export', `已下载 ${name} · ${(blob.size / 1024).toFixed(1)} KB（CSV 带 UTF-8 BOM，Excel 直接双击不乱码）`);
+  } catch (e) {
+    qlMsg('err', 'export', e.message);
+  }
+  btn.disabled = false;
+}
+
+$('qlRun').onclick = runQuery;
+$('qlValidate').onclick = qlValidate;
+$('qlExportCsv').onclick = () => qlExport('csv');
+$('qlExportJsonl').onclick = () => qlExport('jsonl');
+$('qlSource').onchange = () => {
+  const name = $('qlSource').value;
+  const v = $('qlText').value.trim();
+  if (name) {
+    if (!v) $('qlText').value = `${name} | limit 100`;
+    else if (/^[a-z_][a-z0-9_]*/i.test(v)) $('qlText').value = v.replace(/^[a-z_][a-z0-9_]*/i, name);
+  }
+  renderQlFields();
+  $('qlText').focus();
+};
+$('qlText').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runQuery(); return; }
+  if (e.key === 'Tab') { e.preventDefault(); insertAtCursor($('qlText'), '  '); }
+});
+$('qlText').addEventListener('input', qlSyncSourceSelect);
+
 /* ===== 启动 ===== */
 if (!localStorage.getItem('sime_token')) showLogin(true);
 refreshRules().then(() => { if (currentView === 'rules') renderRules(); });
@@ -615,6 +1287,8 @@ setInterval(refreshHealth, 3000);
 setInterval(refreshAlerts, 3000);
 setInterval(refreshTelemetry, 2000);
 setInterval(refreshTopology, 2000);
+setInterval(refreshEvents, 6000);
+setInterval(refreshEventStats, 20000);
 setInterval(refreshTrend, 30000);
 
 /* ===== AI 运维助手 ===== */

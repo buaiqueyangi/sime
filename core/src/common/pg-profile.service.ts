@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Kysely, PostgresDialect } from 'kysely';
 import { Pool } from 'pg';
+import type { PoolClient } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Generated } from 'kysely';
@@ -45,6 +46,18 @@ interface ResponseAuditRow {
   target: string | null;
   status: Generated<string>;
   ts: Generated<Date>;
+}
+interface EventsRow {
+  id: Generated<number>;
+  ts: Date;
+  domain: string;
+  category: string;
+  name: string | null;
+  source: string | null;
+  src: unknown;
+  dst: unknown;
+  payload: unknown;
+  threat_id: string | null;
 }
 interface TelemetryRow {
   asset_id: string;
@@ -96,6 +109,7 @@ interface ConfigRow {
 
 export interface DB {
   alerts: AlertsRow;
+  events: EventsRow;
   tickets: TicketsRow;
   notifications: NotificationsRow;
   response_audit: ResponseAuditRow;
@@ -120,6 +134,11 @@ export class PgProfileService implements OnModuleDestroy {
 
   get database(): Kysely<DB> | undefined {
     return this.db;
+  }
+
+  /** 连接池是否就绪（SIME_PG_HOST 已配置且 init 成功） */
+  get ready(): boolean {
+    return Boolean(this.pool);
   }
 
   async init(): Promise<boolean> {
@@ -168,6 +187,120 @@ export class PgProfileService implements OnModuleDestroy {
       .returning('id')
       .execute();
     return (rows[0] as { id?: number } | undefined)?.id ?? null;
+  }
+
+  /**
+   * 受限只读查询通道（SIME QL 的执行底座）。
+   *
+   * 三道护栏叠在一起：
+   *  1. `BEGIN TRANSACTION READ ONLY` —— 写语句由 PG 直接拒绝，不依赖字符串过滤；
+   *  2. `SET LOCAL statement_timeout` —— 超时自动中断，避免大表全扫拖垮实例；
+   *  3. 语句与参数由上层 SIME QL 编译器产出，本方法不做任何拼接。
+   */
+  async queryReadonly<T = Record<string, unknown>>(
+    text: string,
+    params: unknown[] = [],
+    timeoutMs = 15_000,
+  ): Promise<{ rows: T[]; rowCount: number; ms: number }> {
+    if (!this.pool) throw new Error('pg profile 未启用（缺少 SIME_PG_HOST 或初始化失败）');
+    const budget = Math.min(Math.max(Math.trunc(timeoutMs) || 15_000, 100), 120_000);
+    const client = await this.pool.connect();
+    const t0 = Date.now();
+    try {
+      await client.query('BEGIN TRANSACTION READ ONLY');
+      await client.query(`SET LOCAL statement_timeout = ${budget}`);
+      await client.query("SET LOCAL TIME ZONE 'UTC'");
+      const res = await client.query(text, params as unknown[]);
+      await client.query('COMMIT');
+      return { rows: res.rows as T[], rowCount: res.rowCount ?? res.rows.length, ms: Date.now() - t0 };
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 可写语句通道（维护任务专用：保留策略删除、维护记录写入）。
+   *
+   * 与 `queryReadonly` 的区别只是不开 READ ONLY 事务；语句仍然由调用方以**常量 + $n 参数**
+   * 形式给出，不接受外部拼接（维护任务里唯一的"变量"是白名单表名与批次大小）。
+   */
+  async queryWrite<T = Record<string, unknown>>(
+    text: string,
+    params: unknown[] = [],
+    timeoutMs = 60_000,
+  ): Promise<{ rows: T[]; rowCount: number; ms: number }> {
+    if (!this.pool) throw new Error('pg profile 未启用（缺少 SIME_PG_HOST 或初始化失败）');
+    const budget = Math.min(Math.max(Math.trunc(timeoutMs) || 60_000, 100), 600_000);
+    const client = await this.pool.connect();
+    const t0 = Date.now();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL statement_timeout = ${budget}`);
+      const res = await client.query(text, params as unknown[]);
+      await client.query('COMMIT');
+      return { rows: res.rows as T[], rowCount: res.rowCount ?? res.rows.length, ms: Date.now() - t0 };
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 在**同一条连接**上持 advisory lock 执行，拿不到锁直接返回 null。
+   *
+   * 用途：`SIME_WORKERS=4` 时四个进程都会跑定时维护，必须保证同一时刻只有一个在删数据。
+   * advisory lock 是会话级的，所以必须复用同一个 client，不能走连接池随手取。
+   */
+  async withAdvisoryLock<T>(
+    key: string,
+    fn: (client: PoolClient) => Promise<T>,
+    timeoutMs = 600_000,
+  ): Promise<T | null> {
+    if (!this.pool) throw new Error('pg profile 未启用（缺少 SIME_PG_HOST 或初始化失败）');
+    const budget = Math.min(Math.max(Math.trunc(timeoutMs) || 600_000, 1_000), 3_600_000);
+    const client = await this.pool.connect();
+    try {
+      const got = await client.query<{ ok: boolean }>(
+        "select pg_try_advisory_lock(hashtext($1)::bigint) as ok",
+        [key],
+      );
+      if (!got.rows[0]?.ok) return null;
+      // 会话级超时：批量 DELETE 必须能被兜住；释放连接前复位，避免污染池里的下一位使用者
+      await client.query(`SET statement_timeout = ${budget}`);
+      try {
+        return await fn(client);
+      } finally {
+        await client.query('SET statement_timeout = 0').catch(() => undefined);
+        await client.query("select pg_advisory_unlock(hashtext($1)::bigint)", [key]).catch(() => undefined);
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * 表体量概览：行数取 `reltuples` 估算（毫秒级），字节数取真实关系大小。
+   * 用于 `/retention` 状态页，不对大表做 count(*)。
+   */
+  async tableStats(
+    names: string[],
+  ): Promise<{ table: string; rows: number; bytes: number }[]> {
+    if (!this.pool) return [];
+    const res = await this.pool.query<{ t: string; rows: string; bytes: string }>(
+      `select c.relname as t,
+              greatest(c.reltuples, 0)::bigint as rows,
+              pg_total_relation_size(c.oid) as bytes
+         from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = current_schema() and c.relkind = 'r' and c.relname = any($1)`,
+      [names],
+    );
+    return res.rows.map((r) => ({ table: r.t, rows: Number(r.rows), bytes: Number(r.bytes) }));
   }
 
   async onModuleDestroy() {

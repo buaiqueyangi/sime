@@ -6,10 +6,12 @@ import { RuleEngineService } from './rule-engine/rule-engine.service';
 import { TelemetryService } from './telemetry/telemetry.service';
 import { PlaybookService } from './soar/playbook.service';
 import { MqttIngestService } from './ingest/mqtt-ingest.service';
+import { EventStoreService } from './ingest/event-store.service';
+import { IngestService } from './ingest/ingest.service';
 
 /**
  * 分片 worker（M3 多核分片）：
- * 手工组装服务图（无 HTTP）——规则引擎窗口状态/遥测缓冲/PG 持久化/SOAR 全部
+ * 手工组装服务图（无 HTTP）——规则引擎窗口状态/遥测缓冲/事件落库/SOAR 全部
  * 分片内自治；告警经 process.send 上报主进程做 WS 广播。
  * 同设备事件由主进程哈希保证落同分片，聚合窗口正确性不牺牲。
  */
@@ -26,6 +28,10 @@ export class WorkerMain {
     tel.onModuleInit();
     const playbook = new PlaybookService(pg, response, engineSvc);
     playbook.onModuleInit();
+    // 事件落库与 HTTP 主进程共用同一张表、同一套批量参数
+    const store = new EventStoreService(pg);
+    store.onModuleInit();
+    const ingest = new IngestService(store, engineSvc);
 
     engineSvc.onAlert((a) => {
       if (process.send) {
@@ -46,6 +52,7 @@ export class WorkerMain {
               rules: engineSvc.engine.rules.length,
               alerts: engineSvc.engine.alerts.length,
               telemetryBuffered: 0,
+              eventsQueued: store.stats().queued,
             },
           });
         } catch { /* 忽略 */ }
@@ -56,7 +63,7 @@ export class WorkerMain {
       try {
         const ts = Number(m?.ts) || Date.now();
         if (m?.kind === 'tel' && m.deviceId && m.body) tel.ingest(m.deviceId, m.body, ts);
-        else if (m?.kind === 'evt' && m.body) engineSvc.feed(m.body, ts);
+        else if (m?.kind === 'evt' && m.body) ingest.ingest(m.body, { source: 'mqtt', fallbackTs: ts });
       } catch (e) {
         console.warn(`[sime-worker ${process.pid}] message error: ${e instanceof Error ? e.message : String(e)}`);
       }

@@ -15,7 +15,7 @@ Environment=NODE_ENV=production
 Environment=SIME_PORT=3000
 Environment=SIME_ASSET_ROOT=/opt/sime
 Environment=SIME_PG_HOST=127.0.0.1
-Environment=SIME_PG_DDL=/opt/sime/storage/pg/init/01-schema.sql
+Environment=SIME_PG_DDL_DIR=/opt/sime/storage/pg/init
 # 性能机制：堆上限与 GC 策略按 8C16G 档位给出，详见 docs/performance.md
 Environment=NODE_OPTIONS=--max-old-space-size=8192
 ExecStart=/usr/bin/node dist/main.js

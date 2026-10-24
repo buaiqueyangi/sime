@@ -1,3 +1,4 @@
+import { envStr } from '../common/env';
 import { Injectable, Logger } from '@nestjs/common';
 import { AssetRegistryService } from '../common/asset-registry.service';
 import { PgProfileService } from '../common/pg-profile.service';
@@ -46,7 +47,7 @@ export class AssistantService {
   ) {}
 
   stubEnabled(): boolean {
-    return process.env.SIME_LLM_STUB === '1' || !process.env.SIME_LLM_BASEURL;
+    return envStr('SIME_LLM_STUB', '1') === '1' || !envStr('SIME_LLM_BASEURL');
   }
 
   /** 工具执行器：LLM 的"手"，全部直连平台内部服务。 */
@@ -115,8 +116,8 @@ export class AssistantService {
     if (this.stubEnabled()) {
       return { answer: await this.stubAnswer(message), toolCalls: [], stub: true };
     }
-    const base = process.env.SIME_LLM_BASEURL!.replace(/\/$/, '');
-    const model = process.env.SIME_LLM_MODEL ?? 'qwen2.5:7b';
+    const base = envStr('SIME_LLM_BASEURL', '').replace(/\/$/, '');
+    const model = envStr('SIME_LLM_MODEL', 'qwen2.5:7b');
     const messages: Record<string, unknown>[] = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...history.slice(-8).map((h) => ({ role: h.role, content: h.content })),
@@ -128,7 +129,7 @@ export class AssistantService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.SIME_LLM_APIKEY ?? 'none'}`,
+          Authorization: `Bearer ${envStr('SIME_LLM_APIKEY', 'none')}`,
         },
         body: JSON.stringify({ model, messages, tools: TOOLS }),
       });

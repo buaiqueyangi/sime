@@ -27,11 +27,46 @@ worker × N（worker.ts → WorkerMain，手工组装服务图，无 HTTP）
 设备/适配器 → MQTT(sime/v1/{device}/{telemetry|event})
   → MqttIngest 解析（ECS 基线）→ 哈希分发
     → worker：遥测记录（量程越限 + UEBA 3σ 检查 → 引擎）
-             事件（规则引擎增量聚合 → 告警）
+             事件 → IngestService（归一 → events 表 → 规则引擎增量聚合 → 告警）
     → 告警：PG 持久化 → 处置执行器（工单/通知/审计）→ 剧本触发 → WS 广播
     → 遥测：PG 批量落库 + WS 批播
+  → 其它入口：POST /ingest/events（直推）/ /ingest/import（流量包）→ 同一条 IngestService
   → 冷数据：PG 24h → DuckDB → Parquet（数据湖视图，受限只读 SQL）
+  → 检索：SIME QL（`POST /api/v1/query`）→ 编译器 → 参数化 SQL → PG 只读事务
+          /api/v1/events（列表/详情/分布，固定形状的读）
 ```
+
+## 2.0 摄入层（events 落库）
+
+四条入口一条管道，避免"同一个事件从不同口进来结构不一样"这类经典烂账：
+
+```
+MQTT sime/v1/+/event  ┐
+POST /ingest/events   ├→ normalizeEvent → EventStore(300ms 批量, 500 行/语句) → PG events
+POST /ingest/import   │        └→ RuleEngine.feed（同一份 payload，不再二次解析）
+POST /pipeline/simulate┘
+```
+
+- **归一化**（`ingest/event-normalizer.ts`）：ECS 路径映射到表列，`category`/`domain` 收敛到白名单值，
+  `payload` 保留整条原文（取证 + SIME QL `payload->...` 都依赖它）。
+- **落库**（`ingest/event-store.service.ts`）：批量刷盘、分块提交、坏行逐行隔离、队列上限 10 万条后丢弃计数。
+- **导入**（`ingest/import.service.ts`）：JSONL / JSON 数组 / adapter 模式（厂商原始日志 → 适配器映射 → 展开点号键）。
+  导入在内存按 `ts` 升序重排后再喂引擎——引擎滑窗要求时间单调，乱序历史日志会系统性少报。
+- 详见 **[ingest.md](ingest.md)**。
+
+## 2.1 查询层（SIME QL）
+
+对外只有一个查询面，内部分三段：
+
+```
+q 文本 → query-parser（词法/语法 → AST）→ query-compiler（AST → 参数化 SQL）→ query.service（只读事务执行）
+```
+
+- **解析器**零依赖、禁 eval，产出管道式 AST（`where` / `stats` / `sort` / `limit` / `fields`）。
+- **编译器**只认白名单：11 个数据源 × 各自字段白名单，`from` 与字段表达式全部写死；字面量一律 `$n`。
+- **执行**在 `BEGIN TRANSACTION READ ONLY` + `SET LOCAL statement_timeout` 下进行，强制 `LIMIT`（默认 100 / 上限 1000）。
+
+因此不存在"用户 SQL 片段"这条路径，注入面为零。语法与字段目录见 [sime-ql.md](sime-ql.md)。
 
 ## 3. 关键机制（为什么快/为什么对）
 
@@ -45,6 +80,8 @@ worker × N（worker.ts → WorkerMain，手工组装服务图，无 HTTP）
 | 适配器 compile-once | adapter-engine/adapter-engine.ts | 事件路径零编译 |
 | 告警 PG 缓冲回灌（启动竞态） | rule-engine.service.ts | 不丢告警 |
 | 遥测批量刷盘 + 失败回灌 | telemetry.service.ts | 50k 洪峰 45s 消化 |
+| 事件批量刷盘 + 坏行隔离 | ingest/event-store.service.ts | 单语句 500 行分块 |
+| 导入按 ts 重排后研判 | ingest/ingest.service.ts | 5 万条上限内保证窗口正确 |
 | 规则降级编译（坏规则跳过不崩平台） | rule-engine.service.ts | 平台存活 |
 
 ## 4. 扩展点（声明式资产，YAML + JSON Schema）

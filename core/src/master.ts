@@ -8,6 +8,7 @@ import type { NextFunction, Request, Response } from 'express';
 import * as path from 'path';
 import { AppModule } from './app.module';
 import { AuthService } from './auth/auth.service';
+import { envStr } from './common/env';
 import { WsService } from './ws/ws.service';
 import { WorkerMain } from './worker';
 
@@ -31,6 +32,10 @@ export async function bootstrapMaster(): Promise<void> {
   app.enableCors();
   app.enableShutdownHooks();
 
+  // 根路径直达控制台：直接输 http://host:port 不该吃 404（现网最常见的"页面打不开"）
+  const http_ = app.getHttpAdapter().getInstance();
+  http_.get('/', (_req: Request, res: Response) => res.redirect('/ui/'));
+
   // 认证守卫：/api/v1 全保护，豁免 login 与 health（健康检查/登录前状态）
   const auth = app.get(AuthService);
   app.use('/api/v1', (req: Request, res: Response, next: NextFunction) => {
@@ -52,6 +57,15 @@ export async function bootstrapMaster(): Promise<void> {
     .setVersion('0.1.0')
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, doc));
+
+  // 启动即把"会在生产咬人"的配置缺口喊出来：这两项没设置时平台能跑，
+  // 但一个是默认口令、一个是重启即全端下线，不能静默。
+  if (!envStr('SIME_ADMIN_PASSWORD')) {
+    console.warn('[sime] 警告：SIME_ADMIN_PASSWORD 未设置，正在使用默认管理员口令，生产环境必须覆盖');
+  }
+  if (!envStr('SIME_AUTH_SECRET')) {
+    console.warn('[sime] 警告：SIME_AUTH_SECRET 未设置，本次启动将随机生成，重启后所有登录会话失效');
+  }
 
   const port = Number(process.env.SIME_PORT ?? 3000);
   await app.listen(port, '0.0.0.0');

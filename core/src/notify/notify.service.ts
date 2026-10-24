@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { envStr } from '../common/env';
 
 /**
  * 通知渠道服务（M2 SOAR 实化）：
@@ -13,9 +14,9 @@ export class NotifyService {
 
   channels() {
     return {
-      webhook: process.env.SIME_NOTIFY_WEBHOOK_URL ?? null,
-      wecom: process.env.SIME_NOTIFY_WECOM_WEBHOOK ?? null,
-      dingtalk: process.env.SIME_NOTIFY_DINGTALK_WEBHOOK ?? null,
+      webhook: envStr('SIME_NOTIFY_WEBHOOK_URL') ?? null,
+      wecom: envStr('SIME_NOTIFY_WECOM_WEBHOOK') ?? null,
+      dingtalk: envStr('SIME_NOTIFY_DINGTALK_WEBHOOK') ?? null,
     };
   }
 

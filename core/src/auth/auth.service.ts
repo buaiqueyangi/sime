@@ -1,10 +1,14 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto';
+import { envStr } from '../common/env';
 
 /**
  * 认证服务（M1）：HMAC 无状态 token（默认 12h 过期）。
  * secret 未配置时每次启动随机生成（重启即全端下线）；生产建议设置 SIME_AUTH_SECRET。
  * 默认账号 admin / sime123456，用 SIME_ADMIN_PASSWORD 覆盖。
+ *
+ * 注意：这里必须用 envStr 而不是 `??`——compose/K8s 未填该变量时会注入空串，
+ * `?? 默认值` 拦不住空串，会导致"密码默认值被空串覆盖，谁都登不进来"（现网事故）。
  */
 export interface AuthUser {
   username: string;
@@ -13,9 +17,9 @@ export interface AuthUser {
 
 @Injectable()
 export class AuthService {
-  private readonly secret = process.env.SIME_AUTH_SECRET ?? randomBytes(32).toString('hex');
-  private readonly adminUser = process.env.SIME_ADMIN_USER ?? 'admin';
-  private readonly adminPass = process.env.SIME_ADMIN_PASSWORD ?? 'sime123456';
+  private readonly secret = envStr('SIME_AUTH_SECRET') ?? randomBytes(32).toString('hex');
+  private readonly adminUser = envStr('SIME_ADMIN_USER', 'admin');
+  private readonly adminPass = envStr('SIME_ADMIN_PASSWORD', 'sime123456');
   private readonly ttlMs = 12 * 3600 * 1000;
 
   login(username: string, password: string): { token: string; user: string; expiresIn: number } | null {
