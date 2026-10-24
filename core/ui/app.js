@@ -491,9 +491,10 @@ async function refreshResponses() {
     $('rNotify').innerHTML = (r.notifications || []).length
       ? r.notifications.map((n) => `<tr><td class="mono">notify.${esc(n.channel)}</td><td class="mono">${esc(n.groupKey)}</td><td class="dim">${rel(n.ts)}</td></tr>`).join('')
       : '<tr><td class="empty">暂无通知</td></tr>';
+    const stTag = (st) => st === 'executed' ? 'low' : st === 'skipped' ? 'medium' : (st === 'failed' || st === 'timeout') ? 'critical' : st === 'sent' ? 'info' : 'low';
     $('rAudit').innerHTML = (r.audit || []).length
-      ? r.audit.map((a) => `<tr><td class="dim mono">${hhmmss(a.ts)}</td><td class="mono">${esc(a.action)}</td><td class="mono">${esc(a.target)}</td><td><span class="tag low">${esc(a.status)}</span></td></tr>`).join('')
-      : '<tr><td colspan="4" class="empty">暂无响应动作</td></tr>';
+      ? r.audit.map((a) => `<tr><td class="dim mono">${hhmmss(a.ts)}</td><td class="mono">${esc(a.action)}</td><td class="mono">${esc(a.target)}</td><td><span class="tag ${stTag(a.status)}">${esc(a.status)}</span></td><td class="dim" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.detail || '')}">${esc(a.detail || (a.cmdId ? '等待回执…' : ''))}</td></tr>`).join('')
+      : '<tr><td colspan="5" class="empty">暂无响应动作</td></tr>';
   } catch (e) { /* 静默重试 */ }
 }
 

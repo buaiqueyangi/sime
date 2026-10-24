@@ -115,7 +115,7 @@ export class ResponseService {
         groupKey: (n.payload as { groupKey?: string })?.groupKey ?? '-',
         ts: new Date(n.ts).getTime(),
       })),
-      audit: audit.map((a) => ({ action: a.action, target: a.target ?? '-', status: a.status, ts: new Date(a.ts).getTime() })),
+      audit: audit.map((a) => ({ action: a.action, target: a.target ?? '-', status: a.status, ts: new Date(a.ts).getTime(), detail: ((a as unknown as { reply?: { detail?: string } }).reply)?.detail ?? '', cmdId: (a as unknown as { cmd_id?: string }).cmd_id ?? null })),
     };
   }
 
