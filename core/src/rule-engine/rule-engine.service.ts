@@ -113,9 +113,15 @@ export class RuleEngineService implements OnModuleInit {
     this.alertListeners.push(fn);
   }
 
-  /** 重建引擎（清空窗口/冷却/告警状态），供"重置回放"使用。 */
+  /** 重建引擎（清空窗口/冷却/告警状态），供"重置回放"使用。
+   *  必须同步完成：simulate 等 reset 调用方紧接着就喂事件，异步重建会让
+   *  这批事件全部打在空引擎上（生产竞态：回放 51 事件 0 告警）。 */
   rebuild(): void {
-    this.onModuleInitEngine();
+    if (this.lastValidDefs.length) {
+      this.engine = new (require('./rule-engine').RuleEngine)(this.lastValidDefs);
+    } else {
+      this.onModuleInitEngine();
+    }
   }
 
   private onModuleInitEngine(): void {
@@ -124,6 +130,9 @@ export class RuleEngineService implements OnModuleInit {
     void this.buildEngine();
     this.startVersionPoll();
   }
+
+  /** 最近一次成功编译的规则集：rebuild() 用它做同步重建，避免 reset 回放竞态。 */
+  private lastValidDefs: SimeRule[] = [];
 
   /** 构建引擎：文件规则（builtin）+ DB 状态覆盖（禁用）+ DB 自定义规则（custom）。
    *  单条坏规则只跳过并告警，绝不杀死整个平台（生产教训）。 */
@@ -168,6 +177,7 @@ export class RuleEngineService implements OnModuleInit {
         try { valid.push(c); } catch { failed++; }
       }
       this.engine = new RuleEngine(valid);
+      this.lastValidDefs = valid;
       this.logger.log(`rules compiled: ${this.engine.rules.length}${failed ? `（${failed} 条装载失败已跳过）` : ''}`);
       this.compileFailures = failed;
     } catch (e) {
@@ -175,15 +185,18 @@ export class RuleEngineService implements OnModuleInit {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.error(`规则批量编译失败，进入逐条定位: ${msg}`);
       this.engine = new RuleEngine([]);
+      const survived: SimeRule[] = [];
       for (const { file, data } of defs) {
         try {
           const probe = new RuleEngine([data as unknown as SimeRule]);
           this.engine.rules.push(...probe.rules);
+          survived.push(data as unknown as SimeRule);
         } catch {
           failed++;
           this.logger.error(`跳过坏规则 ${file}: ${msg}`);
         }
       }
+      this.lastValidDefs = survived;
       this.compileFailures = failed;
       this.logger.warn(`rules compiled (degraded): ${this.engine.rules.length}, skipped ${failed}`);
     }
