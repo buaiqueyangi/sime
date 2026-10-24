@@ -81,7 +81,10 @@ func (a *Agent) connect() error {
 		SetAutoReconnect(true).
 		SetConnectRetryInterval(5 * time.Second).
 		SetMaxReconnectInterval(60 * time.Second).
-		SetOnConnectHandler(func(c mqtt.Client) { log.Printf("[sime-agent] MQTT 已连接") }).
+		SetOnConnectHandler(func(c mqtt.Client) {
+			log.Printf("[sime-agent] MQTT 已连接")
+			a.subscribeCmd(c)
+		}).
 		SetConnectionLostHandler(func(c mqtt.Client, e error) { log.Printf("[sime-agent] MQTT 断开: %v", e) })
 	a.client = mqtt.NewClient(opts)
 	tok := a.client.Connect()

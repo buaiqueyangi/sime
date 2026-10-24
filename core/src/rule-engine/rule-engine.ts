@@ -37,6 +37,8 @@ export interface SimeAlert {
   hits: number;
   actions: string[];
   summary: string;
+  /** 触发事件上下文（P2）：剧本参数解析用——user/src/file/process 取自命中时的那条事件 */
+  context?: Record<string, unknown>;
 }
 
 type Agg = { kind: 'count'; pred?: Node } | { kind: 'distinct'; p: string };
@@ -303,12 +305,12 @@ export class RuleEngine {
       const lastCd = this.cooldown.get(cdKey) ?? 0;
       if (tsMs - lastCd < rule.windowMs) continue; // 冷却期内去重
       this.cooldown.set(cdKey, tsMs);
-      produced.push(this.emit(rule, key, tsMs));
+      produced.push(this.emit(rule, key, tsMs, event));
     }
     return produced;
   }
 
-  private emit(rule: CompiledRule, groupKey: string, tsMs: number): SimeAlert {
+  private emit(rule: CompiledRule, groupKey: string, tsMs: number, triggeringEvent?: Record<string, unknown>): SimeAlert {
     this.seq++;
     const alert: SimeAlert = {
       id: `al-${String(this.seq).padStart(6, '0')}`,
@@ -321,6 +323,7 @@ export class RuleEngine {
       hits: 0,
       actions: rule.def.response?.default ?? [],
       summary: rule.def.triage.trim().split('\n')[0]!.slice(0, 120),
+      context: extractContext(triggeringEvent),
     };
     this.alerts.push(alert);
     if (this.alerts.length > MAX_ALERTS) this.alerts.shift();
@@ -339,4 +342,29 @@ function aggIndex(rule: CompiledRule, i: number): number {
   let d = 0;
   for (let k = 0; k < i; k++) if (rule.aggs[k]!.kind === 'distinct') d++;
   return d;
+}
+
+/** 触发事件上下文（P2 剧本参数解析）：从命中事件提取常用字段。 */
+function extractContext(ev?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!ev) return undefined;
+  const get = (p: string) => {
+    let cur: unknown = ev;
+    for (const seg of p.split('.')) {
+      if (cur === null || typeof cur !== 'object') return undefined;
+      cur = (cur as Record<string, unknown>)[seg];
+    }
+    return cur;
+  };
+  const ctx: Record<string, unknown> = {};
+  const user = get('user.name');
+  const srcIp = get('src.ip');
+  const file = get('file.path');
+  const proc = get('process.name');
+  const assetId = get('dst.asset_id');
+  if (user !== undefined) ctx['user.name'] = user;
+  if (srcIp !== undefined) ctx['src.ip'] = srcIp;
+  if (file !== undefined) ctx['file.path'] = file;
+  if (proc !== undefined) ctx['process.name'] = proc;
+  if (assetId !== undefined) ctx['dst.asset_id'] = assetId;
+  return Object.keys(ctx).length ? ctx : undefined;
 }

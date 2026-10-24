@@ -78,7 +78,7 @@ function tick(): void {
     // 周期性码率异常点：偏离历史基线 >3σ（statistical_anomaly），演示 UEBA
     if (d.id === 'dev-cam-001' && ticks % 90 === 0) (points as Record<string, number>).bitrate_kbps = 40000;
     // agent 元数据（docs/agent-family.md 统一契约）：心跳随 telemetry 上报，平台侧登记台账
-    const payload = JSON.stringify({ asset_id: d.id, kind: d.kind, ts: new Date(t).toISOString(), agent: { type: 'host', version: '0.1.0', capabilities: ['auditd', 'fim', 'baseline'] }, points });
+    const payload = JSON.stringify({ asset_id: d.id, kind: d.kind, ts: new Date(t).toISOString(), agent: { type: 'sim', version: '0.1.0', capabilities: [] }, points });
     client.publish(`sime/v1/${d.id}/telemetry`, payload);
     published++;
   }

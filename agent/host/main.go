@@ -20,7 +20,9 @@ func main() {
 	asset := flag.String("asset", "", "资产 ID（默认同设备 ID）")
 	interval := flag.Duration("heartbeat", 30*time.Second, "心跳间隔")
 	stateDir := flag.String("state", "/var/lib/sime-agent", "基线状态目录")
+	protect := flag.String("protect-cidr", "", "永不被封锁的 CIDR 列表（逗号分隔，防管理面锁死）")
 	flag.Parse()
+	parseProtectCIDRs(*protect)
 
 	dev := *device
 	if dev == "" {
