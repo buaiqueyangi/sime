@@ -43,6 +43,55 @@ export class RulesController {
     };
   }
 
+  /**
+   * 规则试跑（沙箱）：用真实历史事件回放一条尚未保存的规则定义，
+   * 返回"若该规则当时已启用会打出多少告警"+样本——上线前防误报的最后一道闸。
+   * 只编译规则并在临时引擎内评估，绝不触发真实告警/处置。
+   */
+  @Post('dryrun')
+  @HttpCode(200)
+  async dryrun(@Body() body: { rule?: Record<string, unknown>; hours?: number }) {
+    const def = body?.rule;
+    if (!def) throw new BadRequestException('缺少 rule');
+    const v = this.ruleValidator()(def);
+    if (!v.ok) throw new BadRequestException('规则不合规: ' + v.errors);
+    const db: any = this.pg.database;
+    if (!db) throw new BadRequestException('需要 PostgreSQL（读取历史事件）');
+    const hours = Math.min(Math.max(Number(body?.hours ?? 24), 1), 168);
+    const rows = (await db
+      .selectFrom('events')
+      .select(['ts', 'payload'])
+      .where('ts', '>', new Date(Date.now() - hours * 3600 * 1000))
+      .orderBy('ts', 'asc')
+      .limit(50000)
+      .execute()) as { ts: Date; payload: unknown }[];
+    if (!rows.length) return { eventsScanned: 0, hours, alertsWouldFire: 0, samples: [], note: '时间窗内无事件' };
+    // 临时引擎：只装这一条规则（编译错误在此暴露，而非上线后）
+    const { RuleEngine } = require('../../rule-engine/rule-engine');
+    let engine;
+    try {
+      engine = new RuleEngine([def as never]);
+    } catch (e) {
+      throw new BadRequestException('规则编译失败: ' + (e instanceof Error ? e.message : String(e)));
+    }
+    const samples: Record<string, unknown>[] = [];
+    let fired = 0;
+    for (const r of rows) {
+      const alerts = engine.feed(r.payload as Record<string, unknown>, new Date(r.ts).getTime());
+      fired += alerts.length;
+      if (samples.length < 5 && alerts.length) {
+        samples.push({ ts: alerts[0]!.ts, groupKey: alerts[0]!.groupKey, severity: alerts[0]!.severity, summary: alerts[0]!.summary });
+      }
+    }
+    return {
+      eventsScanned: rows.length,
+      hours,
+      alertsWouldFire: fired,
+      samples,
+      note: fired === 0 ? `近 ${hours}h 的 ${rows.length} 条事件不会触发该规则（条件可能过严或数据源不匹配）` : '样本仅为预览，未产生真实告警',
+    };
+  }
+
   /** 新建自定义规则（Schema 校验 → PG → 全分片热生效）。 */
   @Post()
   @HttpCode(200)

@@ -1550,25 +1550,45 @@ notify.sec_team', 60)}`;
   save.className = 'btn primary'; save.textContent = rid ? '保存（热生效）' : '创建（热生效）';
   const jsonBtn = document.createElement('button');
   jsonBtn.className = 'btn ghost'; jsonBtn.textContent = 'JSON 模式';
-  bar.appendChild(save); bar.appendChild(jsonBtn);
+  bar.appendChild(save); bar.appendChild(dryBtn); bar.appendChild(jsonBtn);
   $('alertModalBody').appendChild(bar);
 
-  save.onclick = async () => {
-    const def = {
-      id: $('rf_id').value.trim(), name: $('rf_name').value.trim(), version: String(d.version || '1.0'), status: 'stable',
-      author: 'console', domain: $('rf_domain').value, category: $('rf_cat').value, severity: $('rf_sev').value,
-      tactics: $('rf_tac').value.split(',').map((x) => x.trim()).filter(Boolean),
-      techniques: $('rf_tec').value.split(',').map((x) => x.trim()).filter(Boolean),
-      detection: {
-        source: $('rf_src').value.trim(), window: $('rf_win').value.trim() || '5m',
-        group_by: $('rf_gb').value.split(',').map((x) => x.trim()).filter(Boolean),
-        condition: $('rf_cond').value.trim(),
-      },
-      response: { default: $('rf_resp').value.split('
+  const collectDef = () => ({
+    id: $('rf_id').value.trim(), name: $('rf_name').value.trim(), version: String(d.version || '1.0'), status: 'stable',
+    author: 'console', domain: $('rf_domain').value, category: $('rf_cat').value, severity: $('rf_sev').value,
+    tactics: $('rf_tac').value.split(',').map((x) => x.trim()).filter(Boolean),
+    techniques: $('rf_tec').value.split(',').map((x) => x.trim()).filter(Boolean),
+    detection: {
+      source: $('rf_src').value.trim(), window: $('rf_win').value.trim() || '5m',
+      group_by: $('rf_gb').value.split(',').map((x) => x.trim()).filter(Boolean),
+      condition: $('rf_cond').value.trim(),
+    },
+    response: { default: $('rf_resp').value.split('
 ').map((x) => x.trim()).filter(Boolean) },
-      triage: $('rf_triage').value,
-      references: d.references || [],
-    };
+    triage: $('rf_triage').value,
+    references: d.references || [],
+  });
+
+  const dryBtn = document.createElement('button');
+  dryBtn.className = 'btn ghost'; dryBtn.textContent = '▶ 试跑（回放近24h）';
+  dryBtn.onclick = async () => {
+    const def = collectDef();
+    if (!def.detection.condition) { toast('请先填写检测条件', true); return; }
+    dryBtn.disabled = true; dryBtn.textContent = '回放中…';
+    let out = document.getElementById('rf_dryout');
+    if (!out) { out = document.createElement('div'); out.id = 'rf_dryout'; out.style.cssText = 'margin-top:10px;padding:10px 12px;background:#0d1526;border:1px solid var(--line);border-radius:8px;font-size:12.5px'; $('alertModalBody').appendChild(out); }
+    try {
+      const r = await jget('/api/v1/rules/dryrun', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rule: def, hours: 24 }) });
+      const color = r.alertsWouldFire === 0 ? 'var(--med)' : r.alertsWouldFire > 200 ? 'var(--crit)' : 'var(--ok)';
+      out.innerHTML = `<b style="color:${color}">试跑结果：${r.alertsWouldFire} 条告警</b> <span class="dim">/ 近 ${r.hours}h 的 ${fmtN(r.eventsScanned)} 条真实事件</span>` +
+        (r.samples || []).map((x) => `<div class="dim mono" style="margin-top:4px">· ${x.ts.slice(11, 19)} [${x.severity}] ${esc(x.groupKey)} — ${esc(String(x.summary).slice(0, 60))}</div>`).join('') +
+        `<div class="dim" style="margin-top:6px">${esc(r.note)}</div>`;
+    } catch (e) { out.innerHTML = `<span style="color:var(--crit)">试跑失败: ${esc(e.message)}</span>`; }
+    dryBtn.disabled = false; dryBtn.textContent = '▶ 试跑（回放近24h）';
+  };
+
+  save.onclick = async () => {
+    const def = collectDef();
     if (!def.id || !def.name || !def.detection.condition || def.triage.length < 20) {
       toast('id/名称/条件必填，研判说明至少 20 字', true); return;
     }
