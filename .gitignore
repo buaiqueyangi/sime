@@ -7,3 +7,4 @@ coverage/
 demo/out/
 .DS_Store
 core/data/
+agent/host/sime-agent-linux-amd64

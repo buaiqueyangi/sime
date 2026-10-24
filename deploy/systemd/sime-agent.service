@@ -1,0 +1,20 @@
+# sime-agent — SIME 主机防护 Agent（P1）
+# 安装：cp deploy/systemd/sime-agent.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now sime-agent
+
+[Unit]
+Description=SIME Host Agent (security telemetry + baseline)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sime-agent --broker tcp://127.0.0.1:1883
+Restart=always
+RestartSec=5
+# 基线状态目录
+StateDirectory=sime-agent
+# 最小权限：读 auth.log 需要 adm 组（安装脚本处理）；无需 root 也可运行（基线降级）
+User=root
+
+[Install]
+WantedBy=multi-user.target
