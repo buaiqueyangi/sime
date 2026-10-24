@@ -231,6 +231,10 @@ async function openAlertDetail(key) {
       $('alertResolve').onclick = () => alertAction('resolve', d.pgId);
     }
     $('alertModalBody').innerHTML = renderAlertDetail(d);
+    // 关联告警行点击 → 弹窗内直接切换到那条告警（不下钻关闭）
+    document.querySelectorAll('.rel-row').forEach((r) => {
+      r.onclick = () => openAlertDetail(r.dataset.rel);
+    });
     const go = $('alertGoEvents');
     go.onclick = () => {
       closeAlertModal();
@@ -292,8 +296,24 @@ function renderAlertDetail(d) {
     })
     .join('');
 
+  // 关联告警：同主体近 24h 的其他告警（可点击下钻）
+  const relatedAlerts = (d.related || []).length
+    ? `<table><thead><tr><th>时间</th><th>级别</th><th>规则</th><th>状态</th><th>摘要</th></tr></thead><tbody>${d.related
+        .map(
+          (r) =>
+            `<tr class="rel-row" data-rel="${r.pgId}" title="点击查看该告警详情" style="cursor:pointer">
+             <td class="mono">${hhmmss(Date.parse(r.ts))}</td>
+             <td><span class="tag ${esc(r.severity)}">${esc(r.severity)}</span></td>
+             <td class="mono">${esc(r.ruleId)}</td>
+             <td><span class="tag ${r.state === 'resolved' ? 'low' : r.state === 'ack' ? 'info' : 'high'}">${esc(r.state)}</span></td>
+             <td class="dim">${esc(r.summary)}</td></tr>`,
+        )
+        .join('')}</tbody></table>`
+    : '<p class="dim">近 24h 无同主体其他告警</p>';
+
   return `
     ${kv}
+    <div class="sec"><h3 class="sec-title">关联告警（同主体 · 近 24h）</h3>${relatedAlerts}</div>
     <div class="sec"><h3 class="sec-title">检测逻辑</h3>${cond}</div>
     ${d.rule?.triage ? `<div class="sec"><h3 class="sec-title">处置建议</h3><p>${esc(d.rule.triage)}</p></div>` : ''}
     ${

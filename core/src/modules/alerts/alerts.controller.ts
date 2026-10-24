@@ -181,7 +181,41 @@ export class AlertsController {
             .execute()
         : [];
 
+    // 关联告警：同主体（groupKey）近 24h 的其他告警——调查一条告警时最关心
+    // "这个 IP/资产还触发过什么"。同规则去重（留最近一条）避免循环告警刷屏。
+    let related: { pgId: number; ruleId: string; ts: string; severity: string; domain: string; state: string; summary: string }[] = [];
+    const selfId = base.pgId;
+    const gk = base.groupKey;
+    if (db && selfId && gk && gk !== '-' && gk !== '_all') {
+      const rows = (await db
+        .selectFrom('alerts')
+        .select(['id', 'rule_id', 'ts', 'severity', 'domain', 'state', 'summary'])
+        .where(({ eb, and }) =>
+          and([
+            eb(sql`entity->>'groupKey'`, '=', gk),
+            eb('id', '!=', selfId),
+            eb('ts', '>', new Date(Date.now() - 24 * 3600 * 1000)),
+          ]),
+        )
+        .orderBy('ts', 'desc')
+        .limit(50)
+        .execute()) as unknown as { id: number; rule_id: string; ts: Date; severity: string; domain: string; state: string; summary: string | null }[];
+      related = rows
+        .filter((r, i, arr) => arr.findIndex((x) => x.rule_id === r.rule_id) === i)
+        .slice(0, 10)
+        .map((r) => ({
+          pgId: r.id,
+          ruleId: r.rule_id,
+          ts: new Date(r.ts).toISOString(),
+          severity: r.severity,
+          domain: r.domain,
+          state: r.state,
+          summary: (r.summary ?? '').slice(0, 80),
+        }));
+    }
+
     return {
+      related,
       ...base,
       rule: def
         ? {
