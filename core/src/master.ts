@@ -47,8 +47,17 @@ export async function bootstrapMaster(): Promise<void> {
     next();
   });
 
-  // 控制台页面（vanilla 静态资源，构建期拷贝到 dist/ui）
-  app.useStaticAssets(path.join(__dirname, 'ui'), { prefix: '/ui' });
+  // 控制台页面（vanilla 静态资源，构建期拷贝到 dist/ui）。
+  // index.html 必须 no-cache：它带着 app.js 的版本戳，缓存了旧 index 就永远
+  // 加载不到新脚本（生产教训：发版后用户浏览器仍跑旧 app.js）。
+  // app.js 等资源带短 max-age + 版本戳查询串，发版即失效。
+  app.useStaticAssets(path.join(__dirname, 'ui'), {
+    prefix: '/ui',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+      else res.setHeader('Cache-Control', 'public, max-age=3600');
+    },
+  });
 
   // API 契约文档：代码即契约
   const doc = new DocumentBuilder()

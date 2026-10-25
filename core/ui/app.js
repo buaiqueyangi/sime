@@ -52,7 +52,7 @@ $('loginBtn').onclick = async () => {
     lastAlertCount = -1;
     toast(`欢迎回来，${j.user}`);
     wsConnect();
-    refreshHealth(); refreshAlerts(); refreshRules(); refreshCatalog(); refreshTelemetry();
+    startConsole();
   } catch (e) {
     $('loginErr').textContent = e.message;
   }
@@ -80,6 +80,7 @@ function showView(v) {
   if (v === 'events') { refreshEvents(); refreshEventStats(); }
   if (v === 'query') initQuery();
   if (v === 'response') refreshResponses();
+  if (v === 'rules') refreshHitStats(); // 启动时不在规则页会跳过，切进来时补拉
   if (v === 'lake') refreshLake();
   if (v === 'topology') refreshTopology();
   if (v === 'assistant') initAssistant();
@@ -1327,22 +1328,37 @@ $('qlText').addEventListener('keydown', (e) => {
 $('qlText').addEventListener('input', qlSyncSourceSelect);
 
 /* ===== 启动 ===== */
-if (!localStorage.getItem('sime_token')) showLogin(true);
-refreshRules().then(() => { if (currentView === 'rules') renderRules();
-  document.querySelectorAll('.rule-row').forEach((r) => {
-    r.onclick = () => openRuleDetail(r.dataset.ruleid);
-  }); });
-refreshCatalog();
-refreshHealth();
-refreshAlerts();
-refreshTelemetry();
-setInterval(refreshHealth, 3000);
-setInterval(refreshAlerts, 3000);
-setInterval(refreshTelemetry, 2000);
-setInterval(refreshTopology, 2000);
-setInterval(refreshEvents, 6000);
-setInterval(refreshEventStats, 20000);
-setInterval(refreshTrend, 30000);
+/* 有 token 也要先验一次：过期 token 直接进登录页，不再先渲染控制台
+   再等 2-3s 后的轮询 401（用户会先看到一个"假在线"的控制台）。 */
+(async () => {
+  if (!localStorage.getItem('sime_token')) { showLogin(true); return; }
+  try {
+    const r = await fetch('/api/v1/alerts?limit=1', { headers: { Authorization: 'Bearer ' + (localStorage.getItem('sime_token') || '') } });
+    if (r.status === 401) return handle401();
+  } catch { /* 网络异常不拦启动，交由轮询按现有逻辑提示 */ }
+  startConsole();
+})();
+
+let consoleStarted = false;
+function startConsole() {
+  if (consoleStarted) return; // 反复登录不叠加轮询定时器
+  consoleStarted = true;
+  refreshRules().then(() => { if (currentView === 'rules') renderRules();
+    document.querySelectorAll('.rule-row').forEach((r) => {
+      r.onclick = () => openRuleDetail(r.dataset.ruleid);
+    }); });
+  refreshCatalog();
+  refreshHealth();
+  refreshAlerts();
+  refreshTelemetry();
+  setInterval(refreshHealth, 3000);
+  setInterval(refreshAlerts, 3000);
+  setInterval(refreshTelemetry, 2000);
+  setInterval(refreshTopology, 2000);
+  setInterval(refreshEvents, 6000);
+  setInterval(refreshEventStats, 20000);
+  setInterval(refreshTrend, 30000);
+}
 
 /* ===== AI 运维助手 ===== */
 let aiBooted = false;
@@ -1540,9 +1556,7 @@ async function openRuleEditor(rid) {
     </div>
     ${F('检测条件（DSL）', 'rf_cond', det.condition || '', "event.category == 'authentication' and count() >= 10", 70)}
     ${F('研判说明（值班第一眼要看的）', 'rf_triage', d.triage || '', '怎么判断、怎么处置', 80)}
-    ${F('响应动作（每行一个）', 'rf_resp', ((d.response || {}).default || []).join('
-'), 'ticket.create
-notify.sec_team', 60)}`;
+    ${F('响应动作（每行一个）', 'rf_resp', ((d.response || {}).default || []).join('\n'), 'ticket.create\nnotify.sec_team', 60)}`;
   $('alertModalBody').appendChild(form);
 
   const bar = document.createElement('div');
@@ -1564,8 +1578,7 @@ notify.sec_team', 60)}`;
       group_by: $('rf_gb').value.split(',').map((x) => x.trim()).filter(Boolean),
       condition: $('rf_cond').value.trim(),
     },
-    response: { default: $('rf_resp').value.split('
-').map((x) => x.trim()).filter(Boolean) },
+    response: { default: $('rf_resp').value.split('\n').map((x) => x.trim()).filter(Boolean) },
     triage: $('rf_triage').value,
     references: d.references || [],
   });

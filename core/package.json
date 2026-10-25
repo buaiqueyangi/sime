@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "postbuild": "node -e \"require('fs').cpSync('ui','dist/ui',{recursive:true})\"",
+    "postbuild": "node -e \"const fs=require('fs');fs.cpSync('ui','dist/ui',{recursive:true});const v=require('./package.json').version+'.'+Date.now();const p='dist/ui/index.html';fs.writeFileSync(p,fs.readFileSync(p,'utf8').split('/ui/app.js').join('/ui/app.js?v='+v));\"",
     "start": "node dist/main.js",
     "validate": "node dist/scripts/validate.js",
     "test": "node dist/scripts/smoke.js",
