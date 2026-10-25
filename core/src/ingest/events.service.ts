@@ -1,5 +1,5 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { SelectQueryBuilder, sql } from 'kysely';
+import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { RawBuilder, SelectQueryBuilder, sql } from 'kysely';
 import { DB, PgProfileService } from '../common/pg-profile.service';
 import { parseTs, SIME_DOMAINS, SimeDomain } from './event-normalizer';
 
@@ -110,16 +110,28 @@ export class EventsService {
     'user', 'process', 'file', 'host', 'asset', 'asset_id', 'threat', 'threat_id', 'action', 'outcome',
   ]);
 
-  /** 解析 q：`src:10.0.0.8 user:root 勒索` → 字段条件 + 剩余关键词。 */
-  private parseQ(q: string): { keywords: string[]; fields: [string, string][] } {
-    const keywords: string[] = [];
-    const fields: [string, string][] = [];
-    for (const tok of q.trim().split(/\s+/)) {
+  /** 解析 q：`src:10.0.0.8 -user:root 勒索 -"john doe"` → 字段条件/关键词，前缀 `-` 为排除。
+   *  值含空格用双引号包住（字段:"两 个 词"）。 */
+  private parseQ(q: string): {
+    keywords: { v: string; not: boolean }[];
+    fields: { key: string; v: string; not: boolean }[];
+  } {
+    const keywords: { v: string; not: boolean }[] = [];
+    const fields: { key: string; v: string; not: boolean }[] = [];
+    const tokens = q.trim().match(/-?[^\s"]+:"[^"]*"|-?"[^"]+"|-?\S+/g) ?? [];
+    for (const tok0 of tokens) {
+      let not = false;
+      let tok = tok0;
+      if (tok.length > 1 && tok.startsWith('-')) {
+        not = true;
+        tok = tok.slice(1);
+      }
       const i = tok.indexOf(':');
       const key = i > 0 ? tok.slice(0, i).toLowerCase() : '';
-      const val = i > 0 ? tok.slice(i + 1) : '';
-      if (key && val && EventsService.Q_FIELDS.has(key)) fields.push([key, val]);
-      else keywords.push(tok);
+      let val = i > 0 ? tok.slice(i + 1) : '';
+      if (val.startsWith('"') && val.endsWith('"') && val.length >= 2) val = val.slice(1, -1);
+      if (key && val && EventsService.Q_FIELDS.has(key)) fields.push({ key, v: val, not });
+      else keywords.push({ v: tok.replace(/^"|"$/g, ''), not });
     }
     return { keywords, fields };
   }
@@ -134,80 +146,140 @@ export class EventsService {
     if (q.source) b = b.where('source', '=', q.source);
     if (q.threat_id) b = b.where('threat_id', '=', q.threat_id);
     // 显式字段过滤：命中归一化列或 payload 内的 ECS 字段（模糊匹配，和 q 字段语法同一套语义）
-    const explicit: [string, string][] = [];
-    if (q.src_ip) explicit.push(['src', q.src_ip]);
-    if (q.dst_ip) explicit.push(['dst', q.dst_ip]);
-    if (q.user) explicit.push(['user', q.user]);
-    if (q.process) explicit.push(['process', q.process]);
-    if (q.file) explicit.push(['file', q.file]);
-    if (q.host) explicit.push(['host', q.host]);
-    if (q.action) explicit.push(['action', q.action]);
-    if (q.outcome) explicit.push(['outcome', q.outcome]);
-    if (q.asset_id) explicit.push(['asset_id', q.asset_id]);
-    const parsed = q.q ? this.parseQ(q.q) : { keywords: [], fields: [] as [string, string][] };
-    for (const [key, val] of [...explicit, ...parsed.fields]) {
-      b = this.applyField(b, key, val);
+    const explicit: { key: string; v: string; not: boolean }[] = [];
+    if (q.src_ip) explicit.push({ key: 'src', v: q.src_ip, not: false });
+    if (q.dst_ip) explicit.push({ key: 'dst', v: q.dst_ip, not: false });
+    if (q.user) explicit.push({ key: 'user', v: q.user, not: false });
+    if (q.process) explicit.push({ key: 'process', v: q.process, not: false });
+    if (q.file) explicit.push({ key: 'file', v: q.file, not: false });
+    if (q.host) explicit.push({ key: 'host', v: q.host, not: false });
+    if (q.action) explicit.push({ key: 'action', v: q.action, not: false });
+    if (q.outcome) explicit.push({ key: 'outcome', v: q.outcome, not: false });
+    if (q.asset_id) explicit.push({ key: 'asset_id', v: q.asset_id, not: false });
+    const parsed = q.q
+      ? this.parseQ(q.q)
+      : { keywords: [] as { v: string; not: boolean }[], fields: [] as { key: string; v: string; not: boolean }[] };
+    for (const { key, v, not } of [...explicit, ...parsed.fields]) {
+      const cond = this.fieldCond(key, v);
+      if (cond) b = b.where(not ? sql<boolean>`not (${cond})` : cond);
     }
     if (parsed.keywords.length) {
       // 关键词：先用 ts 索引缩小范围再过滤；payload::text 兜底让任意深处的字段都能被
-      // 搜到（字段要齐全），代价被时间窗口上界兜住。多个关键词 AND，单关键词内 OR。
-      const conds = parsed.keywords.map((kw) => {
+      // 搜到（字段要齐全），代价被时间窗口上界兜住。正排 AND（词内 OR），`-词` 排除。
+      const orBranches = (kw: string) => {
         const like = `%${kw}%`;
         return sql<boolean>`(coalesce(name,'') ilike ${like} or category ilike ${like}
                      or coalesce(source,'') ilike ${like}
                      or coalesce(src->>'ip','') ilike ${like}
                      or coalesce(dst->>'ip','') ilike ${like}
                      or payload::text ilike ${like})`;
-      });
-      b = b.where(sql<boolean>`(${sql.join(conds, sql` or `)})`);
+      };
+      for (const { v, not } of parsed.keywords) {
+        b = b.where(not ? sql<boolean>`not (${orBranches(v)})` : orBranches(v));
+      }
     }
     return b;
   }
 
-  /** 单个字段条件的统一入口：字段键 → 列/jsonb 路径（模糊匹配）。 */
-  private applyField<O>(b: EvQB<O>, key: string, val: string): EvQB<O> {
+  /** 字段键 → 条件表达式（模糊匹配；asset 为精确匹配多路命中）。 */
+  private fieldCond(key: string, val: string): RawBuilder<boolean> | null {
     const like = `%${val}%`;
     switch (key) {
       case 'name':
-        return b.where(sql<boolean>`coalesce(name,'') ilike ${like}`);
+        return sql<boolean>`coalesce(name,'') ilike ${like}`;
       case 'category':
-        return b.where(sql<boolean>`category ilike ${like}`);
+        return sql<boolean>`category ilike ${like}`;
       case 'source':
-        return b.where(sql<boolean>`coalesce(source,'') ilike ${like}`);
+        return sql<boolean>`coalesce(source,'') ilike ${like}`;
       case 'domain':
         return (SIME_DOMAINS as readonly string[]).includes(val)
-          ? b.where('domain', '=', val as SimeDomain)
-          : b;
+          ? sql<boolean>`domain = ${val}`
+          : null;
       case 'src':
       case 'src_ip':
-        return b.where(sql<boolean>`(coalesce(src->>'ip','') ilike ${like} or coalesce(src->>'host','') ilike ${like})`);
+        return sql<boolean>`(coalesce(src->>'ip','') ilike ${like} or coalesce(src->>'host','') ilike ${like})`;
       case 'dst':
       case 'dst_ip':
-        return b.where(sql<boolean>`coalesce(dst->>'ip','') ilike ${like}`);
+        return sql<boolean>`coalesce(dst->>'ip','') ilike ${like}`;
       case 'user':
-        return b.where(sql<boolean>`coalesce(payload->'user'->>'name','') ilike ${like}`);
+        return sql<boolean>`coalesce(payload->'user'->>'name','') ilike ${like}`;
       case 'process':
-        return b.where(sql<boolean>`(coalesce(payload->'process'->>'name','') ilike ${like} or coalesce(payload->'process'->>'command_line','') ilike ${like})`);
+        return sql<boolean>`(coalesce(payload->'process'->>'name','') ilike ${like} or coalesce(payload->'process'->>'command_line','') ilike ${like})`;
       case 'file':
-        return b.where(sql<boolean>`coalesce(payload->'file'->>'path','') ilike ${like}`);
+        return sql<boolean>`coalesce(payload->'file'->>'path','') ilike ${like}`;
       case 'host':
-        return b.where(sql<boolean>`(coalesce(payload->'host'->>'name','') ilike ${like} or coalesce(src->>'host','') ilike ${like} or coalesce(dst->>'host','') ilike ${like})`);
+        return sql<boolean>`(coalesce(payload->'host'->>'name','') ilike ${like} or coalesce(src->>'host','') ilike ${like} or coalesce(dst->>'host','') ilike ${like})`;
       case 'asset':
       case 'asset_id':
-        return b.where(
-          sql<boolean>`(src->>'asset_id' = ${val} or src->'asset'->>'id' = ${val}
-                       or dst->>'asset_id' = ${val} or dst->'asset'->>'id' = ${val})`,
-        );
+        return sql<boolean>`(src->>'asset_id' = ${val} or src->'asset'->>'id' = ${val}
+                       or dst->>'asset_id' = ${val} or dst->'asset'->>'id' = ${val})`;
       case 'threat':
       case 'threat_id':
-        return b.where(sql<boolean>`coalesce(threat_id,'') ilike ${like}`);
+        return sql<boolean>`coalesce(threat_id,'') ilike ${like}`;
       case 'action':
-        return b.where(sql<boolean>`coalesce(payload->'event'->>'action','') ilike ${like}`);
+        return sql<boolean>`coalesce(payload->'event'->>'action','') ilike ${like}`;
       case 'outcome':
-        return b.where(sql<boolean>`coalesce(payload->'event'->>'outcome','') ilike ${like}`);
+        return sql<boolean>`coalesce(payload->'event'->>'outcome','') ilike ${like}`;
       default:
-        return b;
+        return null;
     }
+  }
+
+  /** 字段键 → 分面取值表达式（facets 用；只列有业务意义的键）。 */
+  private facetExpr(key: string): RawBuilder<string> | null {
+    switch (key) {
+      case 'name':
+        return sql<string>`nullif(name,'')`;
+      case 'category':
+        return sql<string>`nullif(category,'')`;
+      case 'source':
+        return sql<string>`nullif(source,'')`;
+      case 'domain':
+        return sql<string>`nullif(domain,'')`;
+      case 'src':
+        return sql<string>`nullif(src->>'ip','')`;
+      case 'dst':
+        return sql<string>`nullif(dst->>'ip','')`;
+      case 'user':
+        return sql<string>`nullif(payload->'user'->>'name','')`;
+      case 'process':
+        return sql<string>`nullif(payload->'process'->>'name','')`;
+      case 'file':
+        return sql<string>`nullif(payload->'file'->>'path','')`;
+      case 'host':
+        return sql<string>`coalesce(nullif(payload->'host'->>'name',''), nullif(src->>'host',''), nullif(dst->>'host',''))`;
+      case 'asset':
+        return sql<string>`coalesce(nullif(src->>'asset_id',''), nullif(dst->>'asset_id',''))`;
+      case 'threat':
+        return sql<string>`nullif(threat_id,'')`;
+      case 'action':
+        return sql<string>`nullif(payload->'event'->>'action','')`;
+      case 'outcome':
+        return sql<string>`nullif(payload->'event'->>'outcome','')`;
+      default:
+        return null;
+    }
+  }
+
+  /** 字段值分布（分面）：当前过滤条件下该字段 top N 取值 + 计数，供点击字段弹出的"可选值"列表。 */
+  async facets(q: EventListQuery & { field?: string; facet_limit?: number | string }): Promise<unknown> {
+    const key = String(q.field ?? '').toLowerCase();
+    const expr = this.facetExpr(key);
+    if (!expr) {
+      throw new BadRequestException(`不支持的分面字段: ${key}（可选 user/process/file/host/action/outcome/src/dst/category/source/domain/name/asset/threat）`);
+    }
+    const win = this.window(q);
+    const limit = Math.min(Math.max(Math.trunc(Number(q.facet_limit) || 10), 1), 50);
+    const db = this.db();
+    const rows = (await (this.filtered(db.selectFrom('events') as unknown as EvQB<any>, q, win) as any)
+      .where(sql`${expr} is not null`)
+      .select([expr.as('value'), sql<number>`count(*)`.as('n')])
+      .groupBy(expr)
+      .orderBy(sql`count(*) desc`)
+      .limit(limit)
+      .execute()
+      .then((rs: any[]) => rs.map((r) => ({ value: r.value, n: Number(r.n ?? 0) })))) as { value: string; n: number }[];
+    return { field: key, rows };
   }
 
   async list(q: EventListQuery): Promise<EventListResult> {

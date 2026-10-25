@@ -238,3 +238,19 @@ tr.alert-row:hover td { background: rgba(79, 140, 255, .06); }
 .ftree .ft-row { display: flex; gap: 8px; padding: 1px 0; align-items: baseline; }
 .ftree .ft-k { color: var(--dim); min-width: 130px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
 .ftree .ft-v { color: #9fc1ff; word-break: break-all; white-space: pre-wrap; }
+
+/* 检索字段点选：可点值 + 弹出菜单 + 可选值分布 */
+.fval { cursor: pointer; border-bottom: 1px dashed transparent; }
+.fval:hover { color: var(--accent); border-bottom-color: var(--accent); }
+th[data-facet] { cursor: pointer; }
+th[data-facet]:hover { color: var(--accent); }
+#fmenu { position: fixed; z-index: 1000; background: #0d1526; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.5); padding: 8px; min-width: 200px; max-width: 340px; display: none; }
+#fmenu .fm-head { font-size: 12px; color: var(--dim); padding: 2px 6px 6px; border-bottom: 1px solid var(--line); margin-bottom: 6px; word-break: break-all; }
+#fmenu .fm-head b { color: var(--accent); }
+#fmenu button.fm-act { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--fg); padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
+#fmenu button.fm-act:hover { background: rgba(79,140,255,.12); }
+#fmenu .fm-facets { max-height: 240px; overflow: auto; margin-top: 4px; }
+#fmenu .fm-facet { display: flex; justify-content: space-between; gap: 12px; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 12.5px; }
+#fmenu .fm-facet:hover { background: rgba(79,140,255,.12); }
+#fmenu .fm-facet .n { color: var(--dim); font-family: Consolas, monospace; flex-shrink: 0; }
+#fmenu .fm-facet .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

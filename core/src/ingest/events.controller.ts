@@ -25,6 +25,12 @@ export class EventsController {
     return this.events.stats(q);
   }
 
+  /** 字段值分布（分面）：?field=user&facet_limit=10 —— 供检索页点击字段弹出的"可选值"列表。 */
+  @Get('facets')
+  facets(@Query() q: EventListQuery & { field?: string; facet_limit?: number | string }): Promise<unknown> {
+    return this.events.facets(q);
+  }
+
   /** 单条事件（含完整 payload，取证用） */
   @Get(':id')
   async one(@Param('id') id: string) {

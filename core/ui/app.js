@@ -860,9 +860,6 @@ async function refreshEvents() {
     $('evtRows').innerHTML = rows.length
       ? rows.map(evtRowHtml).join('')
       : '<tr><td colspan="10" class="empty">该条件下没有事件 —— 换个时间范围，或先用「导入流量包」灌一批数据</td></tr>';
-    document.querySelectorAll('#evtRows tr.evt-row').forEach((tr) => {
-      tr.onclick = () => openEventDetail(tr.dataset.id);
-    });
     evtNotes.list = `窗口 ${evtTime(r.window.from)} ~ ${evtTime(r.window.to)} · 查询 ${r.ms}ms${more ? ' · 缩小范围或加关键词看全部' : ''}`;
     paintEvtNote();
   } catch (e) {
@@ -877,16 +874,17 @@ function evtRowHtml(x) {
   const user = x.payload?.user?.name ?? x.src?.user?.name ?? '';
   const action = x.payload?.event?.action ?? '';
   const outcome = x.payload?.event?.outcome ?? '';
-  return `<tr class="evt-row" data-id="${esc(x.id)}" title="点击查看完整 payload">
+  const fv = (fk, v) => (v ? `<span class="fval" data-fk="${esc(fk)}" data-fv="${esc(v)}" title="点击：筛选 / 排除 / 可选值">${esc(v)}</span>` : '<span class="dim">—</span>');
+  return `<tr class="evt-row" data-id="${esc(x.id)}" title="点击行查看完整 payload">
     <td class="mono">${esc(evtTime(x.ts))}</td>
-    <td><span class="tag ${esc(x.domain)}">${esc(x.domain)}</span></td>
-    <td class="dim">${esc(x.category)}</td>
+    <td>${fv('domain', x.domain)}</td>
+    <td class="dim">${fv('category', x.category)}</td>
     <td>${esc(x.name || '—')}${x.threat_id ? `<div class="dim mono">${esc(x.threat_id)}</div>` : ''}${action ? `<div class="dim">${esc(action)}${outcome ? ' · ' + esc(outcome) : ''}</div>` : ''}</td>
-    <td class="mono">${esc(x.source || '—')}</td>
-    <td class="evt-io">${esc(evtEnd(x.src) || '—')}</td>
-    <td class="evt-io">${esc(evtEnd(x.dst) || '—')}</td>
-    <td class="mono">${esc(user || '—')}</td>
-    <td class="mono">${esc(asset || '—')}</td>
+    <td class="mono">${fv('source', x.source)}</td>
+    <td class="evt-io">${fv('src', evtEnd(x.src))}</td>
+    <td class="evt-io">${fv('dst', evtEnd(x.dst))}</td>
+    <td class="mono">${fv('user', user)}</td>
+    <td class="mono">${fv('asset', asset)}</td>
     <td><button class="mini" data-detail="${esc(x.id)}">详情</button></td>
   </tr>`;
 }
@@ -906,6 +904,148 @@ function fillEvtCategories(s) {
     '<option value="">全部类别</option>' +
     cats.map((c) => `<option value="${esc(c)}" ${c === cur ? 'selected' : ''}>${esc(c)}</option>`).join('');
 }
+
+/* ===== 字段点选菜单：点值 → 筛选 / 排除 / 复制 / 可选值分布 ===== */
+const FVAL_FACETABLE = new Set(['domain', 'category', 'source', 'src', 'dst', 'user', 'asset', 'process', 'file', 'host', 'action', 'outcome']);
+
+/** 值含空格时用引号包成单个 token（后端 parseQ 支持引号值）。 */
+function tokVal(v) {
+  return /\s/.test(v) ? `"${v.replace(/"/g, '')}"` : v;
+}
+
+/** 替换 q 里同字段 token（换值/换极性），避免叠加同字段条件。 */
+function setQToken(fk, fv, not) {
+  const tok = `${not ? '-' : ''}${fk}:${tokVal(fv)}`;
+  const re = new RegExp(`(^|\\s)-?${fk}:"[^"]*"|-?${fk}:\\S+`, 'g');
+  const cur = $('evtQ').value.trim();
+  const next = (cur.replace(re, '').trim() + ' ' + tok).trim();
+  $('evtQ').value = next;
+  evtState.q = next;
+  refreshEvents();
+  refreshEventStats();
+}
+
+/** 请求分面前先剥掉同字段 token/参数，否则可选值列表只剩当前选中值。 */
+function facetQs(fk) {
+  const re = new RegExp(`(^|\\s)-?${fk}:"[^"]*"|-?${fk}:\\S+`, 'g');
+  const p = new URLSearchParams(evtQs({}));
+  const q = (p.get('q') || '').replace(re, ' ').replace(/\s+/g, ' ').trim();
+  if (q) p.set('q', q); else p.delete('q');
+  const pair = { src: 'src_ip', dst: 'dst_ip', user: 'user', process: 'process', file: 'file', host: 'host', action: 'action', outcome: 'outcome', asset: 'asset_id' };
+  if (pair[fk]) p.delete(pair[fk]);
+  return p.toString();
+}
+
+let fmenuEl = null;
+function fmenu() {
+  if (!fmenuEl) {
+    fmenuEl = document.createElement('div');
+    fmenuEl.id = 'fmenu';
+    document.body.appendChild(fmenuEl);
+    document.addEventListener('click', (e) => {
+      if (fmenuEl && !fmenuEl.contains(e.target) && !e.target.closest('.fval') && !e.target.closest('th[data-facet]') && !e.target.closest('.ft-row')) fmenuEl.style.display = 'none';
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && fmenuEl) fmenuEl.style.display = 'none'; });
+  }
+  return fmenuEl;
+}
+
+function showFMenu(px, py, headHtml, actionsHtml) {
+  const m = fmenu();
+  m.innerHTML = `<div class="fm-head">${headHtml}</div>${actionsHtml}`;
+  m.style.display = 'block';
+  const r = m.getBoundingClientRect();
+  m.style.left = `${Math.min(px, window.innerWidth - r.width - 10)}px`;
+  m.style.top = `${Math.min(py, window.innerHeight - r.height - 10)}px`;
+}
+
+function openFvalMenu(x, y, fk, fv) {
+  const acts = [];
+  if (FVAL_FACETABLE.has(fk)) {
+    acts.push(`<button class="fm-act" data-m="f">✚ 按 ${esc(fk)} = "${esc(fv)}" 筛选</button>`);
+    acts.push(`<button class="fm-act" data-m="x">－ 排除 ${esc(fk)} = "${esc(fv)}"</button>`);
+    acts.push(`<button class="fm-act" data-m="v">☰ 查看该字段可选值…</button>`);
+  } else {
+    acts.push(`<button class="fm-act" data-m="k">🔎 全文搜索 "${esc(fv)}"</button>`);
+  }
+  acts.push(`<button class="fm-act" data-m="c">⧉ 复制值</button>`);
+  showFMenu(x, y, `字段 <b>${esc(fk)}</b> = "${esc(fv)}"`, acts.join(''));
+  fmenu().onclick = (e) => {
+    const act = e.target.closest('.fm-act')?.dataset.m;
+    if (!act) return;
+    fmenu().style.display = 'none';
+    if (act === 'f') setQToken(fk, fv, false);
+    else if (act === 'x') setQToken(fk, fv, true);
+    else if (act === 'v') openFacetList(x, y, fk);
+    else if (act === 'k') { $('evtQ').value = tokVal(fv); evtState.q = tokVal(fv); refreshEvents(); refreshEventStats(); }
+    else if (act === 'c') navigator.clipboard?.writeText(fv).then(() => toast('已复制'));
+  };
+}
+
+async function openFacetList(x, y, fk) {
+  showFMenu(x, y, `字段 <b>${esc(fk)}</b> 可选值（当前过滤下 Top 8）`, '<div class="fm-facets"><div class="fm-facet">加载中…</div></div>');
+  try {
+    const r = await jget('/api/v1/events/facets?' + facetQs(fk) + `&field=${encodeURIComponent(fk)}&facet_limit=8`);
+    const rows = (r.rows || []);
+    const list = rows.length
+      ? rows.map((row) => `<div class="fm-facet" data-v="${esc(row.value ?? '')}"><span class="v" title="${esc(row.value ?? '')}">${esc(row.value || '(空)')}</span><span class="n">${fmtN(row.n)}</span></div>`).join('')
+      : '<div class="fm-facet">该窗口内无值</div>';
+    showFMenu(x, y, `字段 <b>${esc(fk)}</b> 可选值（当前过滤下 Top 8）`, `<div class="fm-facets">${list}</div>`);
+    fmenu().onclick = (e) => {
+      const v = e.target.closest('.fm-facet')?.dataset.v;
+      if (v === undefined) return;
+      fmenu().style.display = 'none';
+      if (v !== '') setQToken(fk, v, false);
+    };
+  } catch (err) {
+    showFMenu(x, y, `字段 <b>${esc(fk)}</b> 可选值`, `<div class="fm-facet">${esc(err.message)}</div>`);
+  }
+}
+
+// 结果表：字段值点击 → 菜单；行点击 → 详情（fval 冒泡拦截）
+$('evtRows').addEventListener('click', (e) => {
+  const fval = e.target.closest('.fval');
+  if (fval && fval.dataset.fv) {
+    e.stopPropagation();
+    openFvalMenu(e.clientX, e.clientY, fval.dataset.fk, fval.dataset.fv);
+    return;
+  }
+  const tr = e.target.closest('tr.evt-row');
+  if (tr) openEventDetail(tr.dataset.id);
+});
+
+// 列头点击 → 该字段可选值分布（ Splunk 式钻取 ）
+function bindFacetHeaders() {
+  document.querySelectorAll('#view-events th[data-facet]').forEach((th) => {
+    th.onclick = (e) => openFacetList(e.clientX, e.clientY, th.dataset.facet);
+  });
+}
+bindFacetHeaders();
+
+// 详情弹窗字段树：叶子点击 → 全文搜索 / 复制
+$('evtModalBody').addEventListener('click', (e) => {
+  const leaf = e.target.closest('.ft-row');
+  if (!leaf) return;
+  const k = leaf.querySelector('.ft-k')?.textContent || '';
+  const v = leaf.querySelector('.ft-v')?.textContent || '';
+  if (!v || v === 'null') return;
+  showFMenu(e.clientX, e.clientY, `字段 <b>${esc(k)}</b> = "${esc(v.slice(0, 60))}"`, `
+    <button class="fm-act" data-m="k">🔎 全文搜索该值</button>
+    <button class="fm-act" data-m="c">⧉ 复制值</button>`);
+  fmenu().onclick = (ev) => {
+    const act = ev.target.closest('.fm-act')?.dataset.m;
+    if (!act) return;
+    fmenu().style.display = 'none';
+    if (act === 'k') {
+      $('evtQ').value = tokVal(v);
+      evtState.q = tokVal(v);
+      closeEvtModal();
+      showView('events');
+      refreshEvents();
+      refreshEventStats();
+    } else if (act === 'c') navigator.clipboard?.writeText(v).then(() => toast('已复制'));
+  };
+});
 
 async function refreshEventStats() {
   if (currentView !== 'events') return;
