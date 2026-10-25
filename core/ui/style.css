@@ -254,3 +254,7 @@ th[data-facet]:hover { color: var(--accent); }
 #fmenu .fm-facet:hover { background: rgba(79,140,255,.12); }
 #fmenu .fm-facet .n { color: var(--dim); font-family: Consolas, monospace; flex-shrink: 0; }
 #fmenu .fm-facet .v { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 事件检索过滤栏第二行：源/目的/关键词独占一行，宽度自动补齐 */
+.evt-frow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px 0; }
+.evt-frow .grow { flex: 1 1 240px; min-width: 200px; }

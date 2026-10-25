@@ -135,9 +135,11 @@
             </div>
             <select id="evtCategory"><option value="">全部类别</option></select>
             <select id="evtSource"><option value="">全部来源</option></select>
+          </div>
+          <div class="evt-frow">
             <input id="evtSrcIp" class="filter-input" placeholder="源 IP / 主机" style="max-width:135px" />
             <input id="evtDstIp" class="filter-input" placeholder="目的 IP" style="max-width:135px" />
-            <input id="evtQ" class="filter-input" placeholder="关键词 / 字段:值（user:root src:10.0.0.8 name:ssh）" style="min-width:260px" />
+            <input id="evtQ" class="filter-input grow" placeholder="关键词 / 字段:值（user:root src:10.0.0.8 name:ssh）" />
             <button id="evtMore" class="btn ghost" title="更多字段过滤">更多 ▾</button>
             <button id="evtQuery" class="btn primary">查询</button>
             <button id="evtImport" class="btn ghost">⬆ 导入流量包</button>

@@ -80,6 +80,7 @@ function showView(v) {
   if (v === 'events') { refreshEvents(); refreshEventStats(); }
   if (v === 'query') initQuery();
   if (v === 'response') refreshResponses();
+  if (v === 'agents') refreshAgents(); // 台账有心跳时效性，切入即刷新
   if (v === 'rules') refreshHitStats(); // 启动时不在规则页会跳过，切进来时补拉
   if (v === 'lake') refreshLake();
   if (v === 'topology') refreshTopology();
@@ -1549,6 +1550,7 @@ function startConsole() {
   refreshTelemetry();
   setInterval(refreshHealth, 3000);
   setInterval(refreshAlerts, 3000);
+  setInterval(refreshAgents, 10000); // Agent 心跳 120s 判在线，10s 刷新足够跟手
   setInterval(refreshTelemetry, 2000);
   setInterval(refreshTopology, 2000);
   setInterval(refreshEvents, 6000);
