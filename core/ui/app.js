@@ -798,7 +798,10 @@ $('lakeRun').onclick = async () => {
    后端三条端点：GET /events（列表+计数）、GET /events/stats（分布+时间桶）、
    POST /ingest/import（multipart 流量包）。三者的时间窗口必须一致，
    否则"总数 500 条但趋势图只有 3 根柱"这类不一致会把人带偏，故统一走 evtQs()。 */
-const evtState = { hours: 24, domain: 'all', category: '', source: '', q: '', limit: 200, total: null };
+const evtState = {
+  hours: 24, domain: 'all', category: '', source: '', q: '', limit: 200, total: null,
+  srcIp: '', dstIp: '', user: '', process: '', file: '', host: '', action: '', outcome: '',
+};
 const evtSources = new Set();
 const evtNotes = { list: '', stats: '' };
 let evtChart = null;
@@ -828,6 +831,14 @@ function evtQs(extra) {
   if (evtState.category) p.set('category', evtState.category);
   if (evtState.source) p.set('source', evtState.source);
   if (evtState.q) p.set('q', evtState.q);
+  if (evtState.srcIp) p.set('src_ip', evtState.srcIp);
+  if (evtState.dstIp) p.set('dst_ip', evtState.dstIp);
+  if (evtState.user) p.set('user', evtState.user);
+  if (evtState.process) p.set('process', evtState.process);
+  if (evtState.file) p.set('file', evtState.file);
+  if (evtState.host) p.set('host', evtState.host);
+  if (evtState.action) p.set('action', evtState.action);
+  if (evtState.outcome) p.set('outcome', evtState.outcome);
   for (const [k, v] of Object.entries(extra ?? {})) p.set(k, String(v));
   return p.toString();
 }
@@ -848,14 +859,14 @@ async function refreshEvents() {
     fillEvtSources();
     $('evtRows').innerHTML = rows.length
       ? rows.map(evtRowHtml).join('')
-      : '<tr><td colspan="9" class="empty">该条件下没有事件 —— 换个时间范围，或先用「导入流量包」灌一批数据</td></tr>';
+      : '<tr><td colspan="10" class="empty">该条件下没有事件 —— 换个时间范围，或先用「导入流量包」灌一批数据</td></tr>';
     document.querySelectorAll('#evtRows tr.evt-row').forEach((tr) => {
       tr.onclick = () => openEventDetail(tr.dataset.id);
     });
     evtNotes.list = `窗口 ${evtTime(r.window.from)} ~ ${evtTime(r.window.to)} · 查询 ${r.ms}ms${more ? ' · 缩小范围或加关键词看全部' : ''}`;
     paintEvtNote();
   } catch (e) {
-    $('evtRows').innerHTML = `<tr><td colspan="9" class="empty">${esc(e.message)}</td></tr>`;
+    $('evtRows').innerHTML = `<tr><td colspan="10" class="empty">${esc(e.message)}</td></tr>`;
     evtNotes.list = '';
     paintEvtNote();
   }
@@ -863,14 +874,18 @@ async function refreshEvents() {
 
 function evtRowHtml(x) {
   const asset = x.src?.asset_id ?? x.src?.['asset']?.id ?? x.dst?.asset_id ?? x.dst?.['asset']?.id ?? '';
+  const user = x.payload?.user?.name ?? x.src?.user?.name ?? '';
+  const action = x.payload?.event?.action ?? '';
+  const outcome = x.payload?.event?.outcome ?? '';
   return `<tr class="evt-row" data-id="${esc(x.id)}" title="点击查看完整 payload">
     <td class="mono">${esc(evtTime(x.ts))}</td>
     <td><span class="tag ${esc(x.domain)}">${esc(x.domain)}</span></td>
     <td class="dim">${esc(x.category)}</td>
-    <td>${esc(x.name || '—')}${x.threat_id ? `<div class="dim mono">${esc(x.threat_id)}</div>` : ''}</td>
+    <td>${esc(x.name || '—')}${x.threat_id ? `<div class="dim mono">${esc(x.threat_id)}</div>` : ''}${action ? `<div class="dim">${esc(action)}${outcome ? ' · ' + esc(outcome) : ''}</div>` : ''}</td>
     <td class="mono">${esc(x.source || '—')}</td>
     <td class="evt-io">${esc(evtEnd(x.src) || '—')}</td>
     <td class="evt-io">${esc(evtEnd(x.dst) || '—')}</td>
+    <td class="mono">${esc(user || '—')}</td>
     <td class="mono">${esc(asset || '—')}</td>
     <td><button class="mini" data-detail="${esc(x.id)}">详情</button></td>
   </tr>`;
@@ -941,6 +956,21 @@ function drawEventChart(s) {
   );
 }
 
+/** 全字段树：任意深度 ECS payload 逐叶子展开（details/summary 纯 CSS，无内联脚本）。 */
+function fieldTreeHtml(v, key, depth = 0) {
+  const label = esc(key);
+  if (v === null || typeof v !== 'object') {
+    const val = typeof v === 'string' ? v : JSON.stringify(v);
+    return `<div class="ft-row"><span class="ft-k" title="${label}">${label}</span><span class="ft-v">${esc(val ?? 'null')}</span></div>`;
+  }
+  const entries = Array.isArray(v) ? v.map((x, i) => [String(i), x]) : Object.entries(v);
+  const hint = Array.isArray(v) ? `数组 · ${entries.length} 项` : `${entries.length} 个字段`;
+  const kids = entries.length
+    ? entries.map(([k, x]) => fieldTreeHtml(x, k, depth + 1)).join('')
+    : '<div class="ft-row"><span class="ft-v dim">（空）</span></div>';
+  return `<details ${depth < 2 ? 'open' : ''}><summary>${label} <span class="dim">${hint}</span></summary><div class="ft-node">${kids}</div></details>`;
+}
+
 async function openEventDetail(id) {
   $('evtModal').classList.remove('hidden');
   $('evtModalId').textContent = '#' + id;
@@ -959,8 +989,12 @@ async function openEventDetail(id) {
         <dt>目的</dt><dd class="mono">${esc(evtEnd(e.dst) || '—')}</dd>
         <dt>威胁标识</dt><dd class="mono">${esc(e.threat_id || '—')}</dd>
       </dl>
-      <div class="note" style="margin-bottom:6px">完整 payload（归一化前原文；SIME QL 里可写 payload-&gt;'event'-&gt;&gt;'action' 检索）</div>
-      <div class="jsonbox">${esc(JSON.stringify(e.payload ?? {}, null, 2))}</div>`;
+      <div class="note" style="margin:10px 0 6px">全字段（归一化后的完整 ECS 结构，每个叶子都可被 事件检索 的关键词/字段:值 命中）</div>
+      ${fieldTreeHtml(e.payload ?? {}, 'payload')}
+      <details style="margin-top:8px">
+        <summary class="note">原始 JSON（归一化前原文）</summary>
+        <div class="jsonbox" style="margin-top:6px">${esc(JSON.stringify(e.payload ?? {}, null, 2))}</div>
+      </details>`;
   } catch (err) {
     $('evtModalMeta').textContent = '';
     $('evtModalBody').innerHTML = `<p class="note" style="color:var(--crit)">${esc(err.message)}</p>`;
@@ -1051,10 +1085,32 @@ function renderImportReport(j, file, wallMs) {
 
 $('evtQuery').onclick = () => {
   evtState.q = $('evtQ').value.trim();
+  evtState.srcIp = $('evtSrcIp').value.trim();
+  evtState.dstIp = $('evtDstIp').value.trim();
+  readAdvFilters();
   refreshEvents();
   refreshEventStats();
 };
 $('evtQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('evtQuery').click(); });
+$('evtSrcIp').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('evtQuery').click(); });
+$('evtDstIp').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('evtQuery').click(); });
+$('evtMore').onclick = () => {
+  const adv = $('evtAdv');
+  adv.classList.toggle('hidden');
+  $('evtMore').textContent = adv.classList.contains('hidden') ? '更多 ▾' : '收起 ▴';
+};
+
+function readAdvFilters() {
+  evtState.user = $('evtFUser').value.trim();
+  evtState.process = $('evtFProcess').value.trim();
+  evtState.file = $('evtFFile').value.trim();
+  evtState.host = $('evtFHost').value.trim();
+  evtState.action = $('evtFAction').value.trim();
+  evtState.outcome = $('evtFOutcome').value.trim();
+}
+for (const id of ['evtFUser', 'evtFProcess', 'evtFFile', 'evtFHost', 'evtFAction', 'evtFOutcome']) {
+  $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('evtQuery').click(); });
+}
 
 document.querySelectorAll('#evtRange .chip').forEach((c) => {
   c.onclick = () => setEvtRange(Number(c.dataset.range) || 24);

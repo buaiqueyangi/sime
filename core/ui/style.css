@@ -228,3 +228,13 @@ tr.alert-row:hover td { background: rgba(79, 140, 255, .06); }
 .parse-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 3px 12px; }
 .parse-fields div { font-family: Consolas, monospace; font-size: 11.5px; color: #9fc1ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .parse-fields b { color: var(--dim); font-weight: 400; }
+
+/* 事件详情：全字段树（details/summary，无 JS） */
+.ftree { font-family: Consolas, monospace; font-size: 12px; max-height: 52vh; overflow: auto; background: #0a1220; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.ftree details { margin: 1px 0; }
+.ftree summary { cursor: pointer; color: var(--accent); padding: 1px 0; user-select: none; }
+.ftree summary .dim { color: var(--dim); font-weight: 400; }
+.ftree .ft-node { margin-left: 16px; border-left: 1px solid var(--line); padding-left: 10px; }
+.ftree .ft-row { display: flex; gap: 8px; padding: 1px 0; align-items: baseline; }
+.ftree .ft-k { color: var(--dim); min-width: 130px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+.ftree .ft-v { color: #9fc1ff; word-break: break-all; white-space: pre-wrap; }

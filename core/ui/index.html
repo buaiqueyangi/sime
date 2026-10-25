@@ -135,7 +135,10 @@
             </div>
             <select id="evtCategory"><option value="">全部类别</option></select>
             <select id="evtSource"><option value="">全部来源</option></select>
-            <input id="evtQ" class="filter-input" placeholder="关键词：名称 / 类别 / 来源 / IP" />
+            <input id="evtSrcIp" class="filter-input" placeholder="源 IP / 主机" style="max-width:135px" />
+            <input id="evtDstIp" class="filter-input" placeholder="目的 IP" style="max-width:135px" />
+            <input id="evtQ" class="filter-input" placeholder="关键词 / 字段:值（user:root src:10.0.0.8 name:ssh）" style="min-width:260px" />
+            <button id="evtMore" class="btn ghost" title="更多字段过滤">更多 ▾</button>
             <button id="evtQuery" class="btn primary">查询</button>
             <button id="evtImport" class="btn ghost">⬆ 导入流量包</button>
             <label class="note" title="历史流量包建议关闭：研判会把规则引擎的时间水位拉回过去"><input id="evtFeed" type="checkbox" checked /> 导入同时研判</label>
@@ -146,11 +149,20 @@
             <input id="evtFile" type="file" class="hidden" accept=".jsonl,.ndjson,.json,.log,.txt,.csv,.pcap,.pcapng,.cap" />
             <span id="evtNote" class="note"></span>
           </div>
+          <div id="evtAdv" class="hidden" style="display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px">
+            <input id="evtFUser" class="filter-input" placeholder="用户（user.name）" style="max-width:160px" />
+            <input id="evtFProcess" class="filter-input" placeholder="进程（name / 命令行）" style="max-width:200px" />
+            <input id="evtFFile" class="filter-input" placeholder="文件路径" style="max-width:200px" />
+            <input id="evtFHost" class="filter-input" placeholder="主机名" style="max-width:150px" />
+            <input id="evtFAction" class="filter-input" placeholder="动作（event.action）" style="max-width:160px" />
+            <input id="evtFOutcome" class="filter-input" placeholder="结果（outcome）" style="max-width:130px" />
+            <span class="note">以上与 q 里的 字段:值 同一套语义（模糊匹配）；任意 payload 深处字段也可直接关键词全文搜</span>
+          </div>
           <div id="evtImportOut" class="hidden"></div>
           <div id="evtChart" class="chart-sm"></div>
           <table>
-            <thead><tr><th>时间</th><th>域</th><th>类别</th><th>名称</th><th>来源</th><th>源</th><th>目的</th><th>资产</th><th></th></tr></thead>
-            <tbody id="evtRows"><tr><td colspan="9" class="empty">加载中…</td></tr></tbody>
+            <thead><tr><th>时间</th><th>域</th><th>类别</th><th>名称</th><th>来源</th><th>源</th><th>目的</th><th>用户</th><th>资产</th><th></th></tr></thead>
+            <tbody id="evtRows"><tr><td colspan="10" class="empty">加载中…</td></tr></tbody>
           </table>
         </div>
       </section>

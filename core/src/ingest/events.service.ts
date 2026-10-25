@@ -18,6 +18,15 @@ export interface EventListQuery {
   source?: string;
   asset_id?: string;
   threat_id?: string;
+  /** 常用字段过滤（与 q 里 "字段:值" 同一条件集，供 API 调用方显式传参） */
+  src_ip?: string;
+  dst_ip?: string;
+  user?: string;
+  process?: string;
+  file?: string;
+  host?: string;
+  action?: string;
+  outcome?: string;
   q?: string;
   limit?: number | string;
   offset?: number | string;
@@ -95,6 +104,26 @@ export class EventsService {
   }
 
   /** 统一过滤条件（列表与计数共用，避免两处条件写法漂移） */
+  /** q 里允许的 "字段:值" 键集；不在集内的 token 一律当普通关键词。 */
+  private static readonly Q_FIELDS = new Set([
+    'name', 'category', 'source', 'domain', 'src', 'dst', 'src_ip', 'dst_ip',
+    'user', 'process', 'file', 'host', 'asset', 'asset_id', 'threat', 'threat_id', 'action', 'outcome',
+  ]);
+
+  /** 解析 q：`src:10.0.0.8 user:root 勒索` → 字段条件 + 剩余关键词。 */
+  private parseQ(q: string): { keywords: string[]; fields: [string, string][] } {
+    const keywords: string[] = [];
+    const fields: [string, string][] = [];
+    for (const tok of q.trim().split(/\s+/)) {
+      const i = tok.indexOf(':');
+      const key = i > 0 ? tok.slice(0, i).toLowerCase() : '';
+      const val = i > 0 ? tok.slice(i + 1) : '';
+      if (key && val && EventsService.Q_FIELDS.has(key)) fields.push([key, val]);
+      else keywords.push(tok);
+    }
+    return { keywords, fields };
+  }
+
   private filtered<O>(qb: EvQB<O>, q: EventListQuery, win: { from: Date; to: Date }): EvQB<O> {
     let b = qb.where('ts', '>=', win.from).where('ts', '<=', win.to);
     if (q.domain && (SIME_DOMAINS as readonly string[]).includes(q.domain)) {
@@ -104,24 +133,81 @@ export class EventsService {
     if (q.name) b = b.where('name', '=', q.name);
     if (q.source) b = b.where('source', '=', q.source);
     if (q.threat_id) b = b.where('threat_id', '=', q.threat_id);
-    if (q.asset_id) {
-      const a = q.asset_id;
-      b = b.where(
-        sql<boolean>`(src->>'asset_id' = ${a} or src->'asset'->>'id' = ${a}
-                     or dst->>'asset_id' = ${a} or dst->'asset'->>'id' = ${a})`,
-      );
+    // 显式字段过滤：命中归一化列或 payload 内的 ECS 字段（模糊匹配，和 q 字段语法同一套语义）
+    const explicit: [string, string][] = [];
+    if (q.src_ip) explicit.push(['src', q.src_ip]);
+    if (q.dst_ip) explicit.push(['dst', q.dst_ip]);
+    if (q.user) explicit.push(['user', q.user]);
+    if (q.process) explicit.push(['process', q.process]);
+    if (q.file) explicit.push(['file', q.file]);
+    if (q.host) explicit.push(['host', q.host]);
+    if (q.action) explicit.push(['action', q.action]);
+    if (q.outcome) explicit.push(['outcome', q.outcome]);
+    if (q.asset_id) explicit.push(['asset_id', q.asset_id]);
+    const parsed = q.q ? this.parseQ(q.q) : { keywords: [], fields: [] as [string, string][] };
+    for (const [key, val] of [...explicit, ...parsed.fields]) {
+      b = this.applyField(b, key, val);
     }
-    if (q.q) {
-      // 关键词：先用 ts 索引缩小范围再过滤；ILIKE 本身不吃索引，故不提供"全表关键词搜索"
-      const like = `%${q.q}%`;
-      b = b.where(
-        sql<boolean>`(coalesce(name,'') ilike ${like} or category ilike ${like}
+    if (parsed.keywords.length) {
+      // 关键词：先用 ts 索引缩小范围再过滤；payload::text 兜底让任意深处的字段都能被
+      // 搜到（字段要齐全），代价被时间窗口上界兜住。多个关键词 AND，单关键词内 OR。
+      const conds = parsed.keywords.map((kw) => {
+        const like = `%${kw}%`;
+        return sql<boolean>`(coalesce(name,'') ilike ${like} or category ilike ${like}
                      or coalesce(source,'') ilike ${like}
                      or coalesce(src->>'ip','') ilike ${like}
-                     or coalesce(dst->>'ip','') ilike ${like})`,
-      );
+                     or coalesce(dst->>'ip','') ilike ${like}
+                     or payload::text ilike ${like})`;
+      });
+      b = b.where(sql<boolean>`(${sql.join(conds, sql` or `)})`);
     }
     return b;
+  }
+
+  /** 单个字段条件的统一入口：字段键 → 列/jsonb 路径（模糊匹配）。 */
+  private applyField<O>(b: EvQB<O>, key: string, val: string): EvQB<O> {
+    const like = `%${val}%`;
+    switch (key) {
+      case 'name':
+        return b.where(sql<boolean>`coalesce(name,'') ilike ${like}`);
+      case 'category':
+        return b.where(sql<boolean>`category ilike ${like}`);
+      case 'source':
+        return b.where(sql<boolean>`coalesce(source,'') ilike ${like}`);
+      case 'domain':
+        return (SIME_DOMAINS as readonly string[]).includes(val)
+          ? b.where('domain', '=', val as SimeDomain)
+          : b;
+      case 'src':
+      case 'src_ip':
+        return b.where(sql<boolean>`(coalesce(src->>'ip','') ilike ${like} or coalesce(src->>'host','') ilike ${like})`);
+      case 'dst':
+      case 'dst_ip':
+        return b.where(sql<boolean>`coalesce(dst->>'ip','') ilike ${like}`);
+      case 'user':
+        return b.where(sql<boolean>`coalesce(payload->'user'->>'name','') ilike ${like}`);
+      case 'process':
+        return b.where(sql<boolean>`(coalesce(payload->'process'->>'name','') ilike ${like} or coalesce(payload->'process'->>'command_line','') ilike ${like})`);
+      case 'file':
+        return b.where(sql<boolean>`coalesce(payload->'file'->>'path','') ilike ${like}`);
+      case 'host':
+        return b.where(sql<boolean>`(coalesce(payload->'host'->>'name','') ilike ${like} or coalesce(src->>'host','') ilike ${like} or coalesce(dst->>'host','') ilike ${like})`);
+      case 'asset':
+      case 'asset_id':
+        return b.where(
+          sql<boolean>`(src->>'asset_id' = ${val} or src->'asset'->>'id' = ${val}
+                       or dst->>'asset_id' = ${val} or dst->'asset'->>'id' = ${val})`,
+        );
+      case 'threat':
+      case 'threat_id':
+        return b.where(sql<boolean>`coalesce(threat_id,'') ilike ${like}`);
+      case 'action':
+        return b.where(sql<boolean>`coalesce(payload->'event'->>'action','') ilike ${like}`);
+      case 'outcome':
+        return b.where(sql<boolean>`coalesce(payload->'event'->>'outcome','') ilike ${like}`);
+      default:
+        return b;
+    }
   }
 
   async list(q: EventListQuery): Promise<EventListResult> {
