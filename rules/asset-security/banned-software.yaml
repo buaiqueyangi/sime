@@ -1,0 +1,22 @@
+id: rule.asset.banned-software
+name: 资产清单发现违禁软件
+version: "1.0"
+status: stable
+author: sime-core
+domain: it
+category: compliance
+tactics: ["TA0005 防御规避"]
+techniques: ["T1129 共享模块"]
+severity: high
+detection:
+  source: agent.inventory
+  window: 10m
+  group_by: ["dst.asset_id"]
+  condition: "event.name == 'inventory_software_hit'"
+response:
+  default: ["ticket.create(sla=30m)", "notify.it_duty"]
+triage: >
+  已安装软件包命中违禁名单（config 表 asset.banned_software，默认空、按企业
+  合规要求配置）：与软件资产管理流程联动，确认非业务必需后卸载并审计安装来源。
+references:
+  - https://attack.mitre.org/techniques/T1129/

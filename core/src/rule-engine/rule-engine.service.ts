@@ -82,6 +82,43 @@ export class RuleEngineService implements OnModuleInit {
 
   private pending: SimeAlert[] = [];
 
+  private readonly syntheticCooldown = new Map<string, number>();
+
+  /** 合成告警入口（非事件流命中：资产清单核对、健康巡检等平台自检）。
+   *  走与规则命中完全相同的处置链路（响应动作/剧本/WS/持久化）。
+   *  冷却 6h：清单 10 分钟一报，同一发现不重复轰炸；从内置规则库取
+   *  名称与响应动作，保证 UI 详情/处置建议一致。 */
+  raise(input: { ruleId: string; severity: string; domain?: string; groupKey: string; summary: string; context?: Record<string, unknown> }): SimeAlert | null {
+    const cdKey = `${input.ruleId}|${input.groupKey}`;
+    const last = this.syntheticCooldown.get(cdKey) ?? 0;
+    if (Date.now() - last < 6 * 3600_000) return null;
+    if (this.syntheticCooldown.size > 500) {
+      for (const [k, t] of this.syntheticCooldown) {
+        if (Date.now() - t > 6 * 3600_000) this.syntheticCooldown.delete(k);
+      }
+    }
+    const def = this.registry.get('rules').entries.find((e) => String(e.data['id']) === input.ruleId)?.data;
+    const a: SimeAlert = {
+      id: `${input.ruleId}@${Date.now()}`,
+      ruleId: input.ruleId,
+      ruleName: String(def?.['name'] ?? input.ruleId),
+      severity: input.severity,
+      domain: input.domain ?? String(def?.['domain'] ?? 'it'),
+      ts: new Date().toISOString(),
+      groupKey: input.groupKey,
+      hits: 1,
+      actions: ((def?.['response'] as Record<string, unknown> | undefined)?.['default'] as string[]) ?? [],
+      summary: input.summary,
+      context: input.context,
+    };
+    this.syntheticCooldown.set(cdKey, Date.now());
+    this.logger.log(`synthetic alert: ${a.ruleId} @ ${a.groupKey}`);
+    void this.dispatch(a);
+    if (this.pgActive) void this.persistInsert(a);
+    else if (this.pending.length < 500) this.pending.push(a);
+    return a;
+  }
+
   private async dispatch(a: SimeAlert): Promise<void> {
     try {
       await this.response.execute(a, a.pgId ?? null);
