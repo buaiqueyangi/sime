@@ -25,7 +25,7 @@ type Agent struct {
 
 const agentVersion = "0.1.0"
 
-var agentCaps = []string{"auth-log", "baseline-users", "baseline-ports", "baseline-cron", "baseline-suid"}
+var agentCaps = []string{"auth-log", "inventory", "baseline-users", "baseline-ports", "baseline-cron", "baseline-suid"}
 
 // Run：连接 → 首采基线 → 启动事件流/基线循环/心跳。
 func (a *Agent) Run() error {
@@ -47,6 +47,9 @@ func (a *Agent) Run() error {
 
 	// 事件流：auth.log
 	go a.tailAuthLog()
+
+	// 资产清单：10 分钟全量（进程/软件/CPU/内存/磁盘）
+	a.inventoryLoop()
 
 	// 周期基线：10 分钟
 	go func() {

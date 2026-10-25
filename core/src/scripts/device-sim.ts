@@ -78,9 +78,35 @@ function tick(): void {
     // 周期性码率异常点：偏离历史基线 >3σ（statistical_anomaly），演示 UEBA
     if (d.id === 'dev-cam-001' && ticks % 90 === 0) (points as Record<string, number>).bitrate_kbps = 40000;
     // agent 元数据（docs/agent-family.md 统一契约）：心跳随 telemetry 上报，平台侧登记台账
-    const payload = JSON.stringify({ asset_id: d.id, kind: d.kind, ts: new Date(t).toISOString(), agent: { type: 'sim', version: '0.1.0', capabilities: [] }, points });
+    const payload = JSON.stringify({ asset_id: d.id, kind: d.kind, ts: new Date(t).toISOString(), agent: { type: 'sim', version: '0.1.0', capabilities: ['inventory'] }, points });
     client.publish(`sime/v1/${d.id}/telemetry`, payload);
     published++;
+  }
+  // 模拟资产清单：每 100 tick（约 10 分钟档位）报一次，保持平台侧清单演示数据新鲜
+  if (ticks % 100 === 1) {
+    for (const d of DEVICES) {
+      const inv = {
+        device_id: d.id,
+        asset_id: d.id,
+        collected_at: new Date(t).toISOString(),
+        host: { hostname: d.id, os: `SimeOS ${d.kind}（模拟）`, kernel: '5.15.0-sim', arch: 'x86_64', boot_epoch: Math.floor((t - 86400_000 * 6) / 1000) },
+        cpu: { model: 'Simulated Core i5-12400', cores: 6, load1: Number((Math.random() * 2).toFixed(2)) },
+        memory: { total_mb: 8192, available_mb: 1024 + Math.floor(Math.random() * 2048) },
+        disk: [{ fs: 'simfs', mount: '/', totalGB: 120, usedGB: Number((30 + Math.random() * 40).toFixed(1)) }],
+        processes: { count: 80 + (ticks % 20), top: [
+          { pid: 1001, name: 'sime-edge-agent', user: 'root', cpu: Number((Math.random() * 8).toFixed(1)), mem: 2.1, cmd: '/usr/bin/sime-edge-agent --device ' + d.id },
+          { pid: 1002, name: 'mqtt-broker', user: 'mqtt', cpu: Number((Math.random() * 4).toFixed(1)), mem: 3.4, cmd: 'emqx foreground' },
+          { pid: 1003, name: 'telemetry-collector', user: 'ops', cpu: Number((Math.random() * 2).toFixed(1)), mem: 1.2, cmd: 'python3 collector.py' },
+        ] },
+        software: [
+          { name: 'sime-edge-agent', version: '0.1.0' },
+          { name: 'openssl', version: '3.0.11' },
+          { name: 'nginx', version: '1.22.1' },
+        ],
+      };
+      client.publish(`sime/v1/${d.id}/inventory`, JSON.stringify(inv));
+      published++;
+    }
   }
 }
 

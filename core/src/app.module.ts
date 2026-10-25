@@ -12,6 +12,7 @@ import { TelemetryController } from './telemetry/telemetry.controller';
 import { AgentsController } from './modules/agents/agents.controller';
 import { TelemetryService } from './telemetry/telemetry.service';
 import { MqttIngestService } from './ingest/mqtt-ingest.service';
+import { InventoryService } from './agents/inventory.service';
 import { ResponseService } from './response/response.service';
 import { RuleEngineService } from './rule-engine/rule-engine.service';
 import { AuthService } from './auth/auth.service';
@@ -68,6 +69,7 @@ import { ImportService } from './ingest/import.service';
     ResponseService,
     TelemetryService,
     MqttIngestService,
+    InventoryService,
     AuthService,
     PlaybookService,
     WsService,

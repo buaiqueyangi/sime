@@ -242,8 +242,8 @@
         <div class="panel">
           <div class="panel-head"><h2>Agent 台账</h2><span class="note">在线判定：120s 内有心跳 · 类型契约见 docs/agent-family.md</span></div>
           <table>
-            <thead><tr><th>设备 ID</th><th>类型</th><th>版本</th><th>能力</th><th>状态</th><th>最近心跳</th></tr></thead>
-            <tbody id="agentRows"><tr><td colspan="6" class="empty">加载中…</td></tr></tbody>
+            <thead><tr><th>设备 ID</th><th>类型</th><th>版本</th><th>能力</th><th>状态</th><th>最近心跳</th><th>资产</th></tr></thead>
+            <tbody id="agentRows"><tr><td colspan="7" class="empty">加载中…</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -368,7 +368,7 @@
 <div id="evtModal" class="modal hidden">
     <div class="modal-card">
       <div class="modal-head">
-        <h2>事件详情 <span id="evtModalId" class="mono"></span></h2>
+        <h2><span id="evtModalKind">事件详情</span> <span id="evtModalId" class="mono"></span></h2>
         <span id="evtModalMeta" class="note"></span>
         <span style="flex: 1"></span>
         <button id="evtModalClose" class="btn ghost">关闭</button>

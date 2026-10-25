@@ -112,6 +112,13 @@ interface ConfigRow {
   value: unknown;
   updated_at: Generated<Date>;
 }
+interface AgentInventoryRow {
+  device_id: string;
+  asset_id: string | null;
+  data: string; // jsonb：写入侧 JSON.stringify（读侧驱动自动反序列化）
+  collected_at: Date | null;
+  updated_at: Generated<Date>;
+}
 
 export interface DB {
   alerts: AlertsRow;
@@ -126,6 +133,7 @@ export interface DB {
   rules: RulesRow;
   playbook_runs: PlaybookRunsRow;
   config: ConfigRow;
+  agent_inventory: AgentInventoryRow;
 }
 
 @Injectable()

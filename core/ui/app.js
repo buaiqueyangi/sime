@@ -1114,6 +1114,7 @@ function fieldTreeHtml(v, key, depth = 0) {
 
 async function openEventDetail(id) {
   $('evtModal').classList.remove('hidden');
+  $('evtModalKind').textContent = '事件详情';
   $('evtModalId').textContent = '#' + id;
   $('evtModalMeta').textContent = '加载中…';
   $('evtModalBody').innerHTML = '';
@@ -1655,16 +1656,76 @@ async function refreshAgents() {
           <td class="mono">${esc(a.version)}</td>
           <td class="dim mono">${esc((a.capabilities || []).join(' ')) || '-'}</td>
           <td><span class="tag ${a.online ? 'low' : 'high'}">${a.online ? '在线' : '离线'}</span></td>
-          <td class="dim">${rel(a.lastSeen)}</td></tr>`).join('')
-      : '<tr><td colspan="6" class="empty">暂无 Agent —— 遥测携带 agent 元数据即自动注册（见 docs/agent-family.md）</td></tr>';
+          <td class="dim">${rel(a.lastSeen)}</td>
+          <td><button class="mini" data-inv="${esc(a.deviceId)}">清单</button></td></tr>`).join('')
+      : '<tr><td colspan="7" class="empty">暂无 Agent —— 遥测携带 agent 元数据即自动注册（见 docs/agent-family.md）</td></tr>';
   } catch (e) {
-    $('agentRows').innerHTML = `<tr><td colspan="6" class="empty">加载失败: ${esc(e.message)}</td></tr>`;
+    $('agentRows').innerHTML = `<tr><td colspan="7" class="empty">加载失败: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+// 台账「清单」按钮（委托绑定一次）
+$('agentRows').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-inv]');
+  if (btn) openInventoryModal(btn.dataset.inv);
+});
+
+/* ===== 资产清单弹窗：主机/CPU/内存/磁盘 + 进程 Top + 已装软件 ===== */
+async function openInventoryModal(deviceId) {
+  $('evtModal').classList.remove('hidden');
+  $('evtModalKind').textContent = '资产清单';
+  $('evtModalId').textContent = deviceId;
+  $('evtModalMeta').textContent = '加载中…';
+  $('evtModalBody').innerHTML = '';
+  try {
+    const d = await jget('/api/v1/agents/inventory/' + encodeURIComponent(deviceId));
+    const inv = d.data ?? {};
+    const host = inv.host ?? {}, cpu = inv.cpu ?? {}, mem = inv.memory ?? {};
+    const kv = (k, v, mono = false) => `<dt>${esc(k)}</dt><dd class="${mono ? 'mono' : ''}">${esc(v ?? '—')}</dd>`;
+    const boot = host.boot_epoch ? new Date(Number(host.boot_epoch) * 1000).toLocaleString() : '—';
+    const disks = (inv.disk || []).map((x) => `<tr><td class="mono">${esc(x.mount)}</td><td class="dim">${esc(x.fs)}</td><td class="mono">${esc(x.usedGB)} / ${esc(x.totalGB)} GB</td></tr>`).join('');
+    const procs = ((inv.processes || {}).top || []).map((p) => `<tr>
+        <td class="mono">${esc(p.pid)}</td><td>${esc(p.name)}<div class="dim mono" title="${esc(p.cmd || '')}">${esc((p.cmd || '').slice(0, 80))}</div></td>
+        <td class="dim">${esc(p.user || '—')}</td>
+        <td class="mono">${esc(p.cpu)}%</td><td class="mono">${esc(p.mem)}%</td></tr>`).join('');
+    const swRaw = inv.software || [];
+    const swNote = swRaw.length ? `${swRaw.length} 个软件包（只显示前 50，可在下方过滤）` : '未采集（非 Linux 或无包管理器）';
+    const swRows = (kw) => swRaw
+      .filter((s) => !kw || s.name.includes(kw) || (s.version || '').includes(kw))
+      .slice(0, 50)
+      .map((s) => `<tr><td class="mono">${esc(s.name)}</td><td class="dim mono">${esc(s.version || '')}</td></tr>`).join('');
+    $('evtModalMeta').textContent = `采集于 ${d.collectedAt ? evtTime(d.collectedAt) : '—'} · OS ${host.os || '—'}`;
+    $('evtModalBody').innerHTML = `
+      <dl class="kv">
+        ${kv('主机名', host.hostname, true)}
+        ${kv('操作系统', host.os ? `${host.os} (${host.os_version || ''})` : '')}
+        ${kv('内核 / 架构', [host.kernel, host.arch].filter(Boolean).join(' · '), true)}
+        ${kv('CPU', cpu.model ? `${cpu.model} × ${cpu.cores} 核` : `${cpu.cores ?? ''} 核`)}
+        ${kv('负载（1m）', cpu.load1, true)}
+        ${kv('内存', mem.total_mb ? `${mem.available_mb ?? '?'} / ${mem.total_mb} MB 可用` : '')}
+        ${kv('开机时间', boot, true)}
+        ${kv('进程数', (inv.processes || {}).count, true)}
+      </dl>
+      ${disks ? `<div class="sec"><h3 class="sec-title">磁盘</h3><table><thead><tr><th>挂载点</th><th>文件系统</th><th>用量</th></tr></thead><tbody>${disks}</tbody></table></div>` : ''}
+      <div class="sec"><h3 class="sec-title">进程 Top（按 CPU+内存）</h3>
+        <table><thead><tr><th>PID</th><th>进程 / 命令行</th><th>用户</th><th>CPU</th><th>内存</th></tr></thead>
+        <tbody>${procs || '<tr><td colspan="5" class="empty">无进程数据</td></tr>'}</tbody></table></div>
+      <div class="sec"><h3 class="sec-title">已安装软件</h3>
+        <div class="note">${esc(swNote)}</div>
+        <input id="invSwFilter" class="filter-input" placeholder="过滤软件名 / 版本…" style="margin:6px 0" />
+        <table><thead><tr><th>软件包</th><th>版本</th></tr></thead><tbody id="invSwRows">${swRows('')}</tbody></table></div>`;
+    const inp = $('invSwFilter');
+    inp.oninput = () => { $('invSwRows').innerHTML = swRows(inp.value.trim()) || '<tr><td colspan="2" class="empty">无匹配</td></tr>'; };
+  } catch (err) {
+    $('evtModalMeta').textContent = '';
+    $('evtModalBody').innerHTML = `<p class="note" style="color:var(--crit)">${esc(err.message)}</p>`;
   }
 }
 
 /* ===== 规则详情弹窗（复用告警弹窗容器，无告警字段时展示规则六要素） ===== */
 async function openRuleDetail(ruleId) {
   try {
+    $('evtModalKind').textContent = '规则详情';
     const d = await jget('/api/v1/rules/' + encodeURIComponent(ruleId));
     const det = d.detection || {};
     const cond = [

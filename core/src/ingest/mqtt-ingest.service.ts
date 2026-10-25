@@ -5,6 +5,7 @@ import mqtt, { MqttClient } from 'mqtt';
 import { TelemetryService } from '../telemetry/telemetry.service';
 import { IngestService } from './ingest.service';
 import { WsService } from '../ws/ws.service';
+import { InventoryService } from '../agents/inventory.service';
 
 /**
  * MQTT 设备接入服务（M1/M3）：
@@ -27,6 +28,7 @@ export class MqttIngestService implements OnModuleInit {
     private readonly tel: TelemetryService,
     private readonly ingest: IngestService,
     private readonly ws: WsService,
+    private readonly inv: InventoryService,
   ) {}
 
   onModuleInit(): void {
@@ -41,7 +43,7 @@ export class MqttIngestService implements OnModuleInit {
     this.client = mqtt.connect(url, { clientId, reconnectPeriod: 3000, clean: true });
     this.client.on('connect', () => {
       this.logger.log(`mqtt connected: ${url} clientId=${clientId}${this.sharded ? ` (sharded → ${WORKERS()} workers)` : ' (inline)'}`);
-      this.client!.subscribe(['sime/v1/+/telemetry', 'sime/v1/+/event'], { qos: 0 }, (err, granted) => {
+      this.client!.subscribe(['sime/v1/+/telemetry', 'sime/v1/+/event', 'sime/v1/+/inventory'], { qos: 0 }, (err, granted) => {
         if (err) {
           this.logger.error(`mqtt subscribe failed: ${err.message}`);
           return;
@@ -69,6 +71,11 @@ export class MqttIngestService implements OnModuleInit {
       const parsed = rawTs ? Date.parse(String(rawTs)) : NaN;
       const ts = Number.isNaN(parsed) ? Date.now() : parsed;
 
+      if (kind === 'inventory') {
+        // 资产清单：低频快照，主进程直接落库（不进分片窗口），WS 推送对清单无意义
+        void this.inv.store(deviceId, body);
+        return;
+      }
       if (kind === 'telemetry') {
         this.dispatchOrRun(deviceId, deviceId, ts, { kind: 'tel', deviceId, body, ts });
       } else if (kind === 'event') {
